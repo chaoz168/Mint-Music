@@ -194,8 +194,9 @@ class _FullPlayerPageState extends ConsumerState<FullPlayerPage> {
                                     ),
                                   );
                                 }
-                                if (!_lyricsPageBuilt)
+                                if (!_lyricsPageBuilt) {
                                   return const SizedBox.expand();
+                                }
                                 return _KeepAlivePage(
                                   child: _PlayerLyricsPage(
                                     amllKey: _amllKey,
@@ -945,16 +946,16 @@ class _BackgroundLayerState extends State<_BackgroundLayer>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  HSLColor.fromColor(dominantColor!)
+                  HSLColor.fromColor(dominantColor)
                       .withLightness(
                         (HSLColor.fromColor(
-                          dominantColor!,
+                          dominantColor,
                         ).lightness).clamp(0.15, 0.45),
                       )
                       .toColor(),
-                  HSLColor.fromColor(dominantColor!)
+                  HSLColor.fromColor(dominantColor)
                       .withLightness(
-                        (HSLColor.fromColor(dominantColor!).lightness - 0.08)
+                        (HSLColor.fromColor(dominantColor).lightness - 0.08)
                             .clamp(0.05, 0.35),
                       )
                       .toColor(),

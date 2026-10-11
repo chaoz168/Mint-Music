@@ -517,7 +517,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
               return _buildPlaylistGrid(colors, playlists);
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, __) => Center(
+            error: (_, _) => Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -583,7 +583,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
               }).toList(),
             ),
             loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
           ),
           const SizedBox(width: AppSpacing.sm),
           _buildMoreCategoryButton(colors, tagsAsync, activeTagId),
@@ -746,7 +746,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
             height: 200,
             child: Center(child: CircularProgressIndicator()),
           ),
-          error: (_, __) => SizedBox(
+          error: (_, _) => SizedBox(
             height: 200,
             child: Center(child: Text(context.tr('加载分类失败'))),
           ),
@@ -951,7 +951,7 @@ class _DiscoverPageState extends ConsumerState<DiscoverPage> {
         return _buildLeaderboardGrid(colors, leaderboards);
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => Center(
+      error: (_, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

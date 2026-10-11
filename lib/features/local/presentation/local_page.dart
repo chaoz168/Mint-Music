@@ -396,7 +396,7 @@ class _LocalPageState extends ConsumerState<LocalPage> {
                 (selecting ? SongBatchActionBar.height : 0),
           ),
           itemCount: songs.length,
-          separatorBuilder: (_, __) =>
+          separatorBuilder: (_, _) =>
               const SizedBox(height: _LocalSongItem.separatorExtent),
           itemBuilder: (context, index) {
             final song = songs[index];
@@ -913,9 +913,7 @@ class _LocalPageState extends ConsumerState<LocalPage> {
           manager.getLyricResult(candidate.key).timeout(const Duration(seconds: 8)),
         ]);
 
-        if (coverUrl == null) {
-          coverUrl = results[0] as String?;
-        }
+        coverUrl ??= results[0] as String?;
         final lyricResult = results[1] as dynamic;
         if (lyricResult != null) {
           final crlyric = lyricResult.crlyric as String?;
@@ -1316,7 +1314,7 @@ class _LocalPageState extends ConsumerState<LocalPage> {
       loading: () => ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('加载歌单中...')), duration: const Duration(seconds: 1)),
       ),
-      error: (_, __) => ScaffoldMessenger.of(context).showSnackBar(
+      error: (_, _) => ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('加载歌单失败')), duration: const Duration(seconds: 2)),
       ),
     );
@@ -1881,7 +1879,7 @@ class _MatchConfirmationSheetState extends ConsumerState<_MatchConfirmationSheet
                               child: Image.network(
                                 widget.original.coverUrl!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(Icons.music_note, size: 28, color: colors.textHint),
+                                errorBuilder: (_, _, _) => Icon(Icons.music_note, size: 28, color: colors.textHint),
                               ),
                             )
                           : Icon(Icons.music_note, size: 28, color: colors.textHint),
@@ -1910,7 +1908,7 @@ class _MatchConfirmationSheetState extends ConsumerState<_MatchConfirmationSheet
                               child: Image.network(
                                 candidate.coverUrl!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(Icons.music_note, size: 28, color: colors.textHint),
+                                errorBuilder: (_, _, _) => Icon(Icons.music_note, size: 28, color: colors.textHint),
                               ),
                             )
                           : Icon(Icons.music_note, size: 28, color: colors.textHint),

@@ -91,15 +91,15 @@ final playbackControllerProvider =
         );
       }
 
-      ref.listen(audioEffectEnabledProvider, (_, __) => syncAudioEffects());
-      ref.listen(equalizerEnabledProvider, (_, __) => syncAudioEffects());
-      ref.listen(equalizerBandsProvider, (_, __) => syncAudioEffects());
-      ref.listen(bassBoostEnabledProvider, (_, __) => syncAudioEffects());
-      ref.listen(bassBoostGainProvider, (_, __) => syncAudioEffects());
-      ref.listen(surroundEnabledProvider, (_, __) => syncAudioEffects());
-      ref.listen(surroundModeProvider, (_, __) => syncAudioEffects());
-      ref.listen(balanceEnabledProvider, (_, __) => syncAudioEffects());
-      ref.listen(balanceValueProvider, (_, __) => syncAudioEffects());
+      ref.listen(audioEffectEnabledProvider, (_, _) => syncAudioEffects());
+      ref.listen(equalizerEnabledProvider, (_, _) => syncAudioEffects());
+      ref.listen(equalizerBandsProvider, (_, _) => syncAudioEffects());
+      ref.listen(bassBoostEnabledProvider, (_, _) => syncAudioEffects());
+      ref.listen(bassBoostGainProvider, (_, _) => syncAudioEffects());
+      ref.listen(surroundEnabledProvider, (_, _) => syncAudioEffects());
+      ref.listen(surroundModeProvider, (_, _) => syncAudioEffects());
+      ref.listen(balanceEnabledProvider, (_, _) => syncAudioEffects());
+      ref.listen(balanceValueProvider, (_, _) => syncAudioEffects());
       syncAudioEffects();
 
       // 播放记忆：保存／恢复进度

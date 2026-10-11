@@ -284,7 +284,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                             loading: () => const Center(
                               child: CircularProgressIndicator(),
                             ),
-                            error: (_, __) => Center(
+                            error: (_, _) => Center(
                               child: Text(
                                 context.tr('加载失败'),
                                 style: TextStyle(color: colors.textHint),
@@ -589,7 +589,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                         vertical: AppSpacing.xs,
                       ),
                       itemCount: suggestions.length,
-                      separatorBuilder: (_, __) => Divider(
+                      separatorBuilder: (_, _) => Divider(
                         height: 1,
                         indent: AppSpacing.xxl,
                         color: colors.surfaceVariant,
@@ -643,7 +643,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       ),
                     ),
                   ),
-                  error: (_, __) => Padding(
+                  error: (_, _) => Padding(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     child: Center(
                       child: Text(
@@ -1087,7 +1087,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => Center(
+      error: (_, _) => Center(
         child: Text(context.tr('搜索失败'), style: TextStyle(color: colors.textHint)),
       ),
     );

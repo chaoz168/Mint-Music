@@ -8,6 +8,7 @@ import '../../settings/application/settings_providers.dart';
 import '../application/desktop_lyric_controller.dart';
 import '../application/desktop_lyric_sync.dart';
 import '../application/lyric_controller.dart';
+import '../application/notification_lyric_sync.dart';
 import '../application/playback_controller.dart';
 import '../domain/models/desktop_lyric_settings.dart';
 import '../domain/models/lyric_line.dart';
@@ -21,6 +22,9 @@ class DesktopLyricLayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 蓝牙歌词同步控制器:与桌面歌词无关,只借用本组件挂在
+    // MaterialApp.builder 上的常驻特性,让它一直保持监听。
+    final _ = ref.watch(notificationLyricSyncProvider);
     final settings = ref.watch(desktopLyricSettingsProvider);
     // 持有同步控制器:它负责权限、歌词加载与系统悬浮窗的渲染。
     final status = ref.watch(desktopLyricSyncProvider);

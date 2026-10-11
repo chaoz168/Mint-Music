@@ -535,8 +535,9 @@ List<LyricLine> stripTranslationFromWords(List<LyricLine> lines) {
       }
     }
 
-    if (filtered.length == line.words.length || filtered.length < 2)
+    if (filtered.length == line.words.length || filtered.length < 2) {
       return line;
+    }
 
     return line.copyWith(words: filtered);
   }).toList();

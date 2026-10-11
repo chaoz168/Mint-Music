@@ -553,6 +553,7 @@ class _AppearanceContent extends ConsumerWidget {
       children: [
         _buildThemeGroup(context, ref, colors),
         _buildDesktopLyricGroup(context, ref, colors),
+        _buildNotificationLyricGroup(context, ref, colors),
         _buildBackgroundModeGroup(context, ref, colors),
         _buildPerformanceGroup(context, ref, colors),
       ],
@@ -945,6 +946,39 @@ class _AppearanceContent extends ConsumerWidget {
               );
               if (v) unawaited(AmllLyricPlayerState.prewarm());
             },
+            activeTrackColor: colors.primary.withValues(alpha: 0.3),
+            activeThumbColor: colors.primary,
+          ),
+          colors: colors,
+        ),
+      ],
+    );
+  }
+
+  /// 蓝牙歌词(通知栏歌词)分组。
+  Widget _buildNotificationLyricGroup(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeColors colors,
+  ) {
+    final enabled = ref.watch(showLyricNotificationProvider);
+    return _SettingGroup(
+      title: '车载蓝牙歌词',
+      subtitle: '连接车载蓝牙（A2DP）后，车机/蓝牙音箱屏幕实时显示当前歌词行，无需额外硬件',
+      colors: colors,
+      children: [
+        _SettingRow(
+          icon: Icons.bluetooth_audio,
+          title: '开启车载蓝牙歌词',
+          subtitle: '歌词写入媒体信息标题位，车机原生媒体区像显示歌名一样滚动显示歌词',
+          trailing: Switch(
+            value: enabled,
+            onChanged: (v) => _persistBool(
+              context,
+              showLyricNotificationProvider,
+              v,
+              (s) => s.setShowLyricNotification(v),
+            ),
             activeTrackColor: colors.primary.withValues(alpha: 0.3),
             activeThumbColor: colors.primary,
           ),
@@ -2010,15 +2044,17 @@ class _PlaybackContent extends ConsumerWidget {
       });
       final dir = await getApplicationDocumentsDirectory();
       await File('${dir.path}/mintmusic_eq_config.json').writeAsString(data);
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr('均衡器配置已导出')), backgroundColor: colors.primary),
         );
+      }
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr('导出失败: $e')), backgroundColor: Colors.red),
         );
+      }
     }
   }
 
@@ -2074,15 +2110,17 @@ class _PlaybackContent extends ConsumerWidget {
           ),
         );
       }
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr('均衡器配置导入成功')), backgroundColor: colors.primary),
         );
+      }
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr('导入失败: $e')), backgroundColor: Colors.red),
         );
+      }
     }
   }
 
@@ -2427,7 +2465,7 @@ class _PluginsContent extends ConsumerWidget {
         _SettingDivider(colors: colors),
         pluginsAsync.when(
           data: (plugins) {
-            if (plugins.isEmpty)
+            if (plugins.isEmpty) {
               return _SettingRow(
                 icon: Icons.add_circle_outline,
                 title: '添加插件',
@@ -2440,6 +2478,7 @@ class _PluginsContent extends ConsumerWidget {
                 colors: colors,
                 onTap: () => context.push('/plugin-management'),
               );
+            }
             return Column(
               children: plugins
                   .take(3)
@@ -3060,13 +3099,14 @@ class _StorageContent extends ConsumerWidget {
                   await s.setCacheDir(tempDir.path);
                 }),
               );
-              if (context.mounted)
+              if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(context.tr('已重置为默认目录')),
                     backgroundColor: Theme.of(context).primaryColor,
                   ),
                 );
+              }
             },
             child: Text(
               context.tr('确定重置'),

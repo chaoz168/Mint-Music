@@ -114,7 +114,7 @@ class SettingsService {
   // -- source quality per platform (stored as JSON) --
   Map<String, String> getSourceQuality() {
     final raw = _prefs.getString('source_quality');
-    if (raw == null)
+    if (raw == null) {
       return {
         '网易云': '320k',
         'QQ音乐': '320k',
@@ -122,6 +122,7 @@ class SettingsService {
         '酷我': '320k',
         '咪咕': '320k',
       };
+    }
     try {
       return Map<String, String>.fromEntries(
         raw.split('|').map((e) {
@@ -289,6 +290,12 @@ class SettingsService {
       _prefs.getString('desktop_lyric_settings') ?? '';
   Future<void> setDesktopLyricSettings(String v) =>
       _prefs.setString('desktop_lyric_settings', v);
+
+  // -- notification lyric (通知栏蓝牙歌词) --
+  bool getShowLyricNotification() =>
+      _prefs.getBool('show_lyric_notification') ?? false;
+  Future<void> setShowLyricNotification(bool v) =>
+      _prefs.setBool('show_lyric_notification', v);
 
   // -- cache directory --
   Future<String> getCacheDir() async {

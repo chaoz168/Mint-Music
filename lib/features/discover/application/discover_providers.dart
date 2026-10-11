@@ -4,7 +4,6 @@ import '../domain/models/playlist.dart';
 import '../domain/models/leaderboard.dart';
 import '../../player/domain/models/song.dart';
 import '../../plugin/application/plugin_providers.dart';
-import '../../plugin/application/music_source_manager.dart';
 import '../../plugin/domain/plugin_types.dart';
 import '../../settings/application/settings_providers.dart';
 

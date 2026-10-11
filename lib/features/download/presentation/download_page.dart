@@ -175,7 +175,7 @@ class _DownloadPageState extends ConsumerState<DownloadPage>
         return _buildTaskList(colors, activeTasks, showProgress: true);
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => _buildEmptyState(colors, Icons.error, context.tr('加载失败')),
+      error: (_, _) => _buildEmptyState(colors, Icons.error, context.tr('加载失败')),
     );
   }
 
@@ -196,7 +196,7 @@ class _DownloadPageState extends ConsumerState<DownloadPage>
         return _buildTaskList(colors, completedTasks);
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => _buildEmptyState(colors, Icons.error, context.tr('加载失败')),
+      error: (_, _) => _buildEmptyState(colors, Icons.error, context.tr('加载失败')),
     );
   }
 
@@ -219,7 +219,7 @@ class _DownloadPageState extends ConsumerState<DownloadPage>
         return _buildTaskList(colors, failedTasks, showRetry: true);
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => _buildEmptyState(colors, Icons.error, context.tr('加载失败')),
+      error: (_, _) => _buildEmptyState(colors, Icons.error, context.tr('加载失败')),
     );
   }
 
@@ -438,7 +438,7 @@ class _DownloadPageState extends ConsumerState<DownloadPage>
     if (seconds == null || seconds <= 0) return '';
     final mins = seconds ~/ 60;
     final secs = seconds % 60;
-    if (mins > 0) return context.tr('剩余 ${mins}分${secs}秒');
-    return context.tr('剩余 ${secs}秒');
+    if (mins > 0) return context.tr('剩余 $mins分$secs秒');
+    return context.tr('剩余 $secs秒');
   }
 }

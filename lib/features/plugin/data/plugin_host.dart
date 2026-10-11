@@ -168,13 +168,11 @@ JSON.stringify((function() {
           print('[PluginHost] 源 ${entry.key} 支持的操作: ${entry.value}');
         }
 
-        if (_pluginInfo == null) {
-          _pluginInfo = PluginMetadata(
+        _pluginInfo ??= PluginMetadata(
             name: '未知插件',
             version: '1.0',
             author: '未知',
           );
-        }
 
         _loaded = true;
         print('[PluginHost] 插件加载成功');
@@ -719,8 +717,7 @@ JSON.stringify((function() {
         final escSource = _escapeForJs(source);
         final escKeyword = _escapeForJs(keyword);
         final result = await _engine.callPluginMethod(
-          "(function(){" +
-              "var handler=typeof requestHandler==='function'?requestHandler:__lxRequestHandler;" +
+          "(function(){" "var handler=typeof requestHandler==='function'?requestHandler:__lxRequestHandler;" +
               "if(typeof handler!=='function')return JSON.stringify({list:[],total:0});" +
               "try{" +
               "var res=handler({" +
@@ -802,8 +799,7 @@ JSON.stringify((function() {
     for (final action in const ['lyric', 'getLyric']) {
       try {
         final result = await _engine.callPluginMethod(
-          "(function(){" +
-              "var handler=typeof requestHandler==='function'?requestHandler:__lxRequestHandler;" +
+          "(function(){" "var handler=typeof requestHandler==='function'?requestHandler:__lxRequestHandler;" +
               "if(typeof handler!=='function')return null;" +
               "var musicInfo=JSON.parse('$escapedInfo');" +
               "var info=Object.assign({musicInfo:musicInfo,type:'lrc'},musicInfo);" +
@@ -869,8 +865,7 @@ JSON.stringify((function() {
     for (final action in const ['lyric', 'getLyric']) {
       try {
         final result = await _engine.callPluginMethod(
-          "(function(){" +
-              "if(typeof requestHandler!=='function')return null;" +
+          "(function(){" "if(typeof requestHandler!=='function')return null;" +
               "var musicInfo=JSON.parse('$escapedInfo');" +
               "var info=Object.assign({musicInfo:musicInfo,type:'lrc'},musicInfo);" +
               "var res=requestHandler({" +

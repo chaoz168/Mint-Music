@@ -485,7 +485,7 @@ class _TagEditorPageState extends ConsumerState<TagEditorPage>
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       itemCount: _searchResults.length,
-      separatorBuilder: (_, __) => Divider(height: 1, color: colors.divider),
+      separatorBuilder: (_, _) => Divider(height: 1, color: colors.divider),
       itemBuilder: (context, index) {
         final item = _searchResults[index];
         return _buildSearchResultItem(colors, item);
