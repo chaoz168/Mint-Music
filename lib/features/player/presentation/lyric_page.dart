@@ -561,24 +561,26 @@ class _LyricPageState extends ConsumerState<LyricPage> {
         ref
             .read(playlistsProvider.notifier)
             .removeSongFromPlaylist('__favorites__', song.id);
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(context.tr('已取消收藏')),
               duration: const Duration(seconds: 1),
             ),
           );
+        }
       } else {
         ref
             .read(playlistsProvider.notifier)
             .addSongToPlaylist('__favorites__', song);
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(context.tr('已添加到我的收藏')),
               duration: const Duration(seconds: 1),
             ),
           );
+        }
       }
     });
   }
@@ -789,13 +791,14 @@ class _LyricPageState extends ConsumerState<LyricPage> {
                       ref
                           .read(playlistsProvider.notifier)
                           .addSongToPlaylist(playlist.id, song);
-                      if (mounted)
+                      if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(context.tr('已添加到「${playlist.name}」')),
                             duration: const Duration(seconds: 1),
                           ),
                         );
+                      }
                     },
                   ),
                 ),
@@ -964,16 +967,16 @@ class _LyricBackgroundLayerState extends State<_LyricBackgroundLayer>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  HSLColor.fromColor(dominantColor!)
+                  HSLColor.fromColor(dominantColor)
                       .withLightness(
                         (HSLColor.fromColor(
-                          dominantColor!,
+                          dominantColor,
                         ).lightness).clamp(0.15, 0.45),
                       )
                       .toColor(),
-                  HSLColor.fromColor(dominantColor!)
+                  HSLColor.fromColor(dominantColor)
                       .withLightness(
-                        (HSLColor.fromColor(dominantColor!).lightness - 0.08)
+                        (HSLColor.fromColor(dominantColor).lightness - 0.08)
                             .clamp(0.05, 0.35),
                       )
                       .toColor(),
@@ -982,7 +985,7 @@ class _LyricBackgroundLayerState extends State<_LyricBackgroundLayer>
             ),
           ),
         if (coverUrl != null &&
-            coverUrl!.isNotEmpty &&
+            coverUrl.isNotEmpty &&
             mode == FullScreenBackgroundMode.cover)
           Stack(
             children: [

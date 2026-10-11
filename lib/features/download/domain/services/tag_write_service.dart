@@ -44,8 +44,8 @@ class TagWriteService {
               coverRes.headers.value('content-type'),
             );
             coverPath = '$dirName${Platform.pathSeparator}$baseName$coverExt';
-            await File(coverPath).writeAsBytes(coverBytes!);
-            debugPrint('[TagWriteService] 封面已下载: $coverPath (${coverBytes!.length} bytes)');
+            await File(coverPath).writeAsBytes(coverBytes);
+            debugPrint('[TagWriteService] 封面已下载: $coverPath (${coverBytes.length} bytes)');
           }
         } catch (e) {
           debugPrint('[TagWriteService] 下载封面失败: $e');
@@ -94,7 +94,7 @@ class TagWriteService {
           : null;
 
       if (useArtwork) {
-        debugPrint('[TagWriteService] 写入标签+封面: title=$titleStr, artist=$artistStr, album=$albumStr, hasLyrics=${lrcToEmbed != null}, artworkSize=${coverBytes?.length}');
+        debugPrint('[TagWriteService] 写入标签+封面: title=$titleStr, artist=$artistStr, album=$albumStr, hasLyrics=${lrcToEmbed != null}, artworkSize=${coverBytes.length}');
         await _writeTagsAndArtwork(
           songPath,
           title: titleStr,
@@ -102,7 +102,7 @@ class TagWriteService {
           album: albumStr,
           albumArtist: albumArtistStr,
           lyrics: lrcToEmbed,
-          artwork: coverBytes!,
+          artwork: coverBytes,
         );
       } else if (useBasicInfo || lrcToEmbed != null) {
         debugPrint('[TagWriteService] 写入标签: title=$titleStr, artist=$artistStr, album=$albumStr, hasLyrics=${lrcToEmbed != null}');
@@ -141,11 +141,11 @@ class TagWriteService {
     try {
       final args = <String, dynamic>{
         'filePath': filePath,
-        if (title != null) 'title': title,
-        if (artist != null) 'artist': artist,
-        if (album != null) 'album': album,
-        if (albumArtist != null) 'albumArtist': albumArtist,
-        if (lyrics != null) 'lyrics': lyrics,
+        'title': ?title,
+        'artist': ?artist,
+        'album': ?album,
+        'albumArtist': ?albumArtist,
+        'lyrics': ?lyrics,
       };
       debugPrint('[TagWriteService] _writeTags args: $args');
       await _channel.invokeMethod<bool>('writeTags', args);
@@ -182,12 +182,12 @@ class TagWriteService {
     try {
       final args = <String, dynamic>{
         'filePath': filePath,
-        if (title != null) 'title': title,
-        if (artist != null) 'artist': artist,
-        if (album != null) 'album': album,
-        if (albumArtist != null) 'albumArtist': albumArtist,
-        if (lyrics != null) 'lyrics': lyrics,
-        if (artwork != null) 'artwork': artwork,
+        'title': ?title,
+        'artist': ?artist,
+        'album': ?album,
+        'albumArtist': ?albumArtist,
+        'lyrics': ?lyrics,
+        'artwork': ?artwork,
       };
       debugPrint('[TagWriteService] _writeTagsAndArtwork args: filePath=$filePath, title=$title, artist=$artist, album=$album, albumArtist=$albumArtist, hasLyrics=${lyrics != null}, hasArtwork=${artwork != null}');
       await _channel.invokeMethod<bool>('writeTagsAndArtwork', args);

@@ -5,7 +5,6 @@ import 'dart:ui' show Color;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/platform/media_scanner.dart';
 import '../../../core/platform/permission_helper.dart';

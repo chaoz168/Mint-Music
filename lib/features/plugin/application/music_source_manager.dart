@@ -1260,7 +1260,7 @@ class MusicSourceManager {
 
     String? readString(List<String> keys) {
       final value = read(keys);
-      return value == null ? null : value.toString();
+      return value?.toString();
     }
 
     Map<String, dynamic>? readMap(String key) {

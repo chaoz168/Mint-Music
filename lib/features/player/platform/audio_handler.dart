@@ -64,6 +64,13 @@ class MusicAudioHandler extends BaseAudioHandler
   /// 直接用默认构造即可。它的构造函数不是 const，所以不能写成 `const`。
   static final PlaybackState _emptyPlaybackState = PlaybackState();
 
+  /// 蓝牙歌词覆盖:非空时媒体通知标题位显示该行歌词
+  /// (蓝牙车载/耳机读取 MediaSession 元数据即可显示)。
+  String? _lyricOverride;
+
+  /// 最近一次未应用歌词覆盖的媒体项,用于恢复标题与合成新状态。
+  MediaItem? _baseMediaItem;
+
   /// 通知栏控制回调（由 PlaybackController 设置）
   VoidCallback? onSkipNext;
   VoidCallback? onSkipPrevious;
@@ -99,10 +106,41 @@ class MusicAudioHandler extends BaseAudioHandler
       if (index != null &&
           queue.value.isNotEmpty &&
           index < queue.value.length) {
-        mediaItem.add(queue.value[index]);
+        _emitMediaItem(queue.value[index]);
         _tryUpdateDurationFromPlayer();
       }
     });
+  }
+
+  /// 统一出口:mediaItem 的所有更新都经过这里,
+  /// 保证蓝牙歌词覆盖在时长刷新等场景下不丢失。
+  void _emitMediaItem(MediaItem item) {
+    _baseMediaItem = item;
+    mediaItem.add(_applyLyricOverride(item));
+  }
+
+  MediaItem _applyLyricOverride(MediaItem item) {
+    final lyric = _lyricOverride;
+    if (lyric == null || lyric.isEmpty) return item;
+    // 标题位放歌词(蓝牙设备读取的元数据)，歌手位改为「歌名-歌手」，
+    // 避免车机屏幕只看到歌词而不知道当前播放的歌。
+    final baseArtist = item.artist ?? '';
+    final artist = baseArtist.isEmpty
+        ? item.title
+        : '${item.title}-$baseArtist';
+    return item.copyWith(title: lyric, displayTitle: item.title, artist: artist);
+  }
+
+  /// 更新蓝牙歌词文本;传 null 还原为歌名。
+  void updateLyricText(String? lyric) {
+    // 会话已清空（用户清空播放列表）时忽略一切歌词推送，
+    // 否则残留的在途歌词事件会凭 _baseMediaItem 把旧曲目写回通知栏。
+    if (_sessionCleared) return;
+    _lyricOverride = (lyric == null || lyric.isEmpty) ? null : lyric;
+    final base = _baseMediaItem;
+    if (base != null) {
+      mediaItem.add(_applyLyricOverride(base));
+    }
   }
 
   void _broadcastState() {
@@ -142,12 +180,13 @@ class MusicAudioHandler extends BaseAudioHandler
   }
 
   void _updateMediaItemDuration(Duration duration) {
-    final currentItem = mediaItem.value;
+    // 基于「未覆盖歌词」的原始项计算,避免把已覆盖的标题串进 displayTitle。
+    final currentItem = _baseMediaItem ?? mediaItem.value;
     if (currentItem == null) return;
     if (currentItem.duration == duration) return;
 
     final updatedItem = currentItem.copyWith(duration: duration);
-    mediaItem.add(updatedItem);
+    _emitMediaItem(updatedItem);
 
     final currentQueue = queue.value;
     final index = _player.currentIndex;
@@ -319,7 +358,7 @@ class MusicAudioHandler extends BaseAudioHandler
       await _player.setAudioSource(playlist, initialIndex: startIndex);
 
       if (startIndex >= 0 && startIndex < mediaItems.length) {
-        mediaItem.add(mediaItems[startIndex]);
+        _emitMediaItem(mediaItems[startIndex]);
       }
 
       _tryUpdateDurationFromPlayer();
@@ -419,7 +458,7 @@ class MusicAudioHandler extends BaseAudioHandler
           ),
         );
 
-        this.mediaItem.add(mediaItem);
+        _emitMediaItem(mediaItem);
         debugPrint('MusicAudioHandler: 音源设置成功');
       } catch (e) {
         debugPrint('MusicAudioHandler: 设置音源失败: $e');
@@ -486,7 +525,7 @@ class MusicAudioHandler extends BaseAudioHandler
       }
 
       queue.add([mediaItem]);
-      this.mediaItem.add(mediaItem);
+      _emitMediaItem(mediaItem);
       debugPrint('MusicAudioHandler: 音频源设置成功');
     } catch (e) {
       debugPrint('MusicAudioHandler: 设置音频源失败: $e');
@@ -703,6 +742,10 @@ class MusicAudioHandler extends BaseAudioHandler
       }
       queue.add(const <MediaItem>[]);
       mediaItem.add(null);
+      // 同步清掉蓝牙歌词覆盖状态，避免残留的歌词推送把旧曲目
+      // 重新写回媒体会话（与上面的过期 setSource 防护同理）。
+      _lyricOverride = null;
+      _baseMediaItem = null;
     } finally {
       _suppressBroadcast = false;
     }
@@ -760,7 +803,7 @@ class MusicAudioHandler extends BaseAudioHandler
   void updateCurrentMediaItem(Song song) {
     final index = _player.currentIndex;
     final updatedItem = _songToMediaItem(song);
-    mediaItem.add(updatedItem);
+    _emitMediaItem(updatedItem);
 
     if (index != null && index >= 0 && index < queue.value.length) {
       final updatedQueue = List<MediaItem>.from(queue.value);

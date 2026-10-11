@@ -303,8 +303,9 @@ class _LyricScrollViewState extends State<LyricScrollView>
     if (!mounted ||
         _userScrolling ||
         _autoScrolling ||
-        !_scrollController.hasClients)
+        !_scrollController.hasClients) {
       return;
+    }
 
     final targetIndex = _activeScrollTargetIndex();
     if (targetIndex < 0 || targetIndex >= _lineKeys.length) return;
@@ -1155,8 +1156,9 @@ class _YrcLineLayout {
         currentRowWidth = 0;
       }
 
-      if (currentRow.isNotEmpty && wi - 1 < gaps.length)
+      if (currentRow.isNotEmpty && wi - 1 < gaps.length) {
         currentRowWidth += gaps[wi - 1];
+      }
       currentRow.add(word);
       currentRowWidth += word.width;
     }

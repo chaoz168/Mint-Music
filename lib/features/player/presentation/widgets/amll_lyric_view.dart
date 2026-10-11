@@ -271,8 +271,9 @@ class _AmllLyricViewState extends State<AmllLyricView>
     if (!mounted ||
         _userScrolling ||
         _autoScrolling ||
-        !_scrollController.hasClients)
+        !_scrollController.hasClients) {
       return;
+    }
     final targetIndex = _activeScrollTargetIndex();
     if (targetIndex < 0 || targetIndex >= _lineKeys.length) return;
     if (!force && targetIndex == _scrollTargetIndex) return;
@@ -290,8 +291,9 @@ class _AmllLyricViewState extends State<AmllLyricView>
     if (lineBox == null ||
         scrollBox == null ||
         !lineBox.hasSize ||
-        !scrollBox.hasSize)
+        !scrollBox.hasSize) {
       return;
+    }
 
     final lineOffset = lineBox.localToGlobal(Offset.zero, ancestor: scrollBox);
     final targetOffset =

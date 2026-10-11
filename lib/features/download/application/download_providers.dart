@@ -137,7 +137,7 @@ final filteredDownloadTasksProvider = Provider<List<DownloadTask>>((ref) {
           .toList();
     },
     loading: () => [],
-    error: (_, __) => [],
+    error: (_, _) => [],
   );
 });
 
@@ -160,6 +160,6 @@ final downloadStatsProvider = Provider<({
       return (total: tasks.length, downloading: downloading, completed: completed, failed: failed);
     },
     loading: () => (total: 0, downloading: 0, completed: 0, failed: 0),
-    error: (_, __) => (total: 0, downloading: 0, completed: 0, failed: 0),
+    error: (_, _) => (total: 0, downloading: 0, completed: 0, failed: 0),
   );
 });

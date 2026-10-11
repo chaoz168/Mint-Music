@@ -65,8 +65,8 @@ void main() async {
         print('Code: ${parsed['code']}, Msg: ${parsed['msg']}');
         if (parsed['data'] != null) {
           final data = parsed['data'];
-          print('Data.url: ${data['url']?.toString()?.substring(0, (data['url']?.toString()?.length ?? 0).clamp(0, 150))}');
-          print('Data.sig: ${data['sig']?.toString()?.substring(0, 60)}');
+          print('Data.url: ${data['url']?.toString().substring(0, (data['url']?.toString().length ?? 0).clamp(0, 150))}');
+          print('Data.sig: ${data['sig']?.toString().substring(0, 60)}');
         }
       } catch (e) {
         print('JSON parse error: $e');

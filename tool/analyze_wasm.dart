@@ -93,7 +93,7 @@ void _parseTypes(Uint8List bytes, int start, int end) {
       for (int j = 0; j < resultCount; j++) {
         results.add(bytes[offset++]);
       }
-      if (i < 30 || params.length > 0 || results.length > 0) {
+      if (i < 30 || params.isNotEmpty || results.isNotEmpty) {
         print('  [$i] func(${_valueTypes(params)}) -> ${_valueTypes(results)}');
       }
     }

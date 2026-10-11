@@ -191,7 +191,7 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
                       );
                     },
                     loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (_, __) => Center(
+                    error: (_, _) => Center(
                       child: Text(context.tr('加载失败'), style: TextStyle(color: colors.textHint)),
                     ),
                   ),
@@ -610,7 +610,7 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
 
   void _removeFromFavorites() async {
     final playlistsAsync = ref.read(playlistsProvider);
-    await playlistsAsync.whenData((localPlaylists) async {
+    playlistsAsync.whenData((localPlaylists) async {
       final existingPlaylist = localPlaylists.firstWhere(
         (p) => p.meta['discoverId'] == widget.playlistId,
         orElse: () => throw Exception('未找到收藏的歌单'),

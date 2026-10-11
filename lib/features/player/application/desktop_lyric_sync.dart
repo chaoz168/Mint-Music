@@ -113,14 +113,14 @@ class DesktopLyricSyncController extends StateNotifier<DesktopLyricStatus>
     if (!_overlay.supported) return;
     final granted = await _overlay.checkPermission();
     if (!mounted) return;
-    this.state = this.state.copyWith(
+    state = state.copyWith(
       supported: true,
       permissionGranted: granted,
     );
     if (!granted) {
       await _overlay.hide();
       _stopSyncTimer();
-      if (mounted) this.state = this.state.copyWith(overlayShowing: false);
+      if (mounted) state = state.copyWith(overlayShowing: false);
       return;
     }
     // 授权成功后补上之前被拦下的「开启」操作。
@@ -393,11 +393,11 @@ final desktopLyricSyncProvider =
       });
       ref.listen(playbackControllerProvider.select((s) => s.currentSong), (
         _,
-        __,
+        _,
       ) {
         controller.onSongChanged();
       });
-      ref.listen(desktopLyricLinesProvider, (_, __) {
+      ref.listen(desktopLyricLinesProvider, (_, _) {
         controller.onLyricChanged();
       });
       // 这里**不再**周期性把行号推给原生:原生侧有自己的时钟并按“到下一行的
@@ -405,7 +405,7 @@ final desktopLyricSyncProvider =
       // 与原生时钟同时驱动会互相打架:滞后的行号把原生往回拽,表现为歌词
       // 慢半拍 + 往回跳一下的闪动。行号只在 updateLyric 时作为初值下发。
       // 播放/暂停切换时立刻刷新锚点,暂停后原生侧停止推进。
-      ref.listen(playbackControllerProvider.select((s) => s.isPlaying), (_, __) {
+      ref.listen(playbackControllerProvider.select((s) => s.isPlaying), (_, _) {
         unawaited(controller.pushPlayState(force: true));
       });
 

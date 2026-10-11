@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/l10n/app_locale.dart';
@@ -179,6 +178,10 @@ final appearanceBgAnimationProvider = StateProvider<bool>((ref) => true);
 final desktopLyricSettingsProvider =
     StateProvider<DesktopLyricSettings>((ref) => DesktopLyricSettings.defaults);
 
+/// 通知栏蓝牙歌词:开启后媒体通知的标题位显示当前歌词行,
+/// 蓝牙车载/耳机等读取 MediaSession 元数据的设备即可显示歌词。
+final showLyricNotificationProvider = StateProvider<bool>((ref) => false);
+
 // -- auto cache music --
 final autoCacheMusicProvider = StateProvider<bool>((ref) => true);
 
@@ -352,6 +355,8 @@ final settingsInitProvider = FutureProvider<void>((ref) async {
   ref.read(desktopLyricSettingsProvider.notifier).state =
       DesktopLyricSettings.decode(svc.getDesktopLyricSettings());
   ref.read(autoCacheMusicProvider.notifier).state = svc.getAutoCacheMusic();
+  ref.read(showLyricNotificationProvider.notifier).state =
+      svc.getShowLyricNotification();
   ref.read(routePreloadEnabledProvider.notifier).state = svc
       .getRoutePreloadEnabled();
   ref.read(autoUpdateProvider.notifier).state = svc.getAutoUpdate();

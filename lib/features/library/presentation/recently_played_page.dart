@@ -29,7 +29,7 @@ class RecentlyPlayedPage extends ConsumerWidget {
                     ? _buildEmptyState(context, colors)
                     : _buildHistoryList(context, ref, colors, history),
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, __) => Center(
+                error: (_, _) => Center(
                   child: Text(context.tr('加载失败'), style: TextStyle(color: colors.textHint)),
                 ),
               ),
