@@ -1256,6 +1256,7 @@ class LibraryPage extends ConsumerWidget {
       discoverPlaylist = await manager.getPlaylistDetail(
         '${platform}_$playlistId',
         sourceId: platform,
+        limit: 10000,
       );
     } catch (e) {
       errorMessage = e.toString();

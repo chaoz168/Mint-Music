@@ -40,8 +40,9 @@ String _estimateSize(String qualityId, int durationSec) {
   };
   final bitrate = kbps[qualityId] ?? 320;
   final sizeBytes = bitrate * 1000 ~/ 8 * durationSec;
-  if (sizeBytes < 1024 * 1024)
+  if (sizeBytes < 1024 * 1024) {
     return '${(sizeBytes / 1024).toStringAsFixed(1)}KB';
+  }
   return '${(sizeBytes / (1024 * 1024)).toStringAsFixed(2)}MB';
 }
 
@@ -227,7 +228,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
           return favorites.songs.any((s) => s.id == widget.song.id);
         },
         loading: () => false,
-        error: (_, __) => false,
+        error: (_, _) => false,
       );
     });
   }
@@ -942,9 +943,9 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     try {
       final svc = await container.read(settingsServiceProvider.future);
       // Map provider names to settings service methods
-      if (provider == lyricShowTranslationProvider)
+      if (provider == lyricShowTranslationProvider) {
         await svc.setLyricShowTranslation(value);
-      else if (provider == lyricShowRomanProvider)
+      } else if (provider == lyricShowRomanProvider)
         await svc.setLyricShowRoman(value);
       else if (provider == lyricEnableBlurProvider)
         await svc.setLyricEnableBlur(value);
@@ -1711,7 +1712,7 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
           );
         }
       },
-      error: (_, __) {
+      error: (_, _) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

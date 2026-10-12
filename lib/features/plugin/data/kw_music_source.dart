@@ -78,6 +78,8 @@ class KuwoMusicSource implements MusicSourceProvider {
   @override
   Future<Playlist?> getPlaylistDetail(
     String playlistId, {
+    int page = 1,
+    int limit = 100,
     int retryNum = 0,
   }) async {
     if (retryNum > 2) return null;
@@ -97,19 +99,19 @@ class KuwoMusicSource implements MusicSourceProvider {
       }
 
       if (digestType == 5) {
-        return _getPlaylistDetailDigest5(actualId);
+        return _getPlaylistDetailDigest5(actualId, page: page, limit: limit);
       }
 
       // digest-13 = album playlist; fall through to digest8 as best effort
-      final result = await _getPlaylistDetailDigest8(actualId);
+      final result = await _getPlaylistDetailDigest8(actualId, page: page, limit: limit);
       if (result != null && result.songs.isNotEmpty) return result;
       if (result == null && retryNum < 2) {
-        return getPlaylistDetail(playlistId, retryNum: retryNum + 1);
+        return getPlaylistDetail(playlistId, page: page, limit: limit, retryNum: retryNum + 1);
       }
       return result;
     } catch (e) {
       if (retryNum < 2) {
-        return getPlaylistDetail(playlistId, retryNum: retryNum + 1);
+        return getPlaylistDetail(playlistId, page: page, limit: limit, retryNum: retryNum + 1);
       }
       return null;
     }
@@ -117,25 +119,28 @@ class KuwoMusicSource implements MusicSourceProvider {
 
   Future<Playlist?> _getPlaylistDetailDigest8(
     String id, {
+    int page = 1,
+    int limit = 100,
     int tryNum = 0,
   }) async {
     if (tryNum > 2) return null;
     try {
+      final pn = page - 1;
       final url =
-          'http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid=$id&pn=0&rn=1000&encode=utf8&keyset=pl2012&identity=kuwo&pcmp4=1&plat=web&from=web&vipver=MUSIC_9.0.5.0_W1&newver=1';
+          'http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid=$id&pn=$pn&rn=$limit&encode=utf8&keyset=pl2012&identity=kuwo&pcmp4=1&plat=web&from=web&vipver=MUSIC_9.0.5.0_W1&newver=1';
       final response = await _apiService.get(url);
       dynamic data = response.data;
       if (data is String) {
         try {
           data = jsonDecode(data);
         } catch (_) {
-          return _getPlaylistDetailDigest8(id, tryNum: tryNum + 1);
+          return _getPlaylistDetailDigest8(id, page: page, limit: limit, tryNum: tryNum + 1);
         }
       }
       if (data == null)
-        return _getPlaylistDetailDigest8(id, tryNum: tryNum + 1);
+        return _getPlaylistDetailDigest8(id, page: page, limit: limit, tryNum: tryNum + 1);
       if (data['result'] != null && data['result'] != 'ok') {
-        return _getPlaylistDetailDigest8(id, tryNum: tryNum + 1);
+        return _getPlaylistDetailDigest8(id, page: page, limit: limit, tryNum: tryNum + 1);
       }
 
       final list = data['musiclist'] as List? ?? [];
@@ -164,7 +169,7 @@ class KuwoMusicSource implements MusicSourceProvider {
           data['title']?.toString() ?? data['name']?.toString() ?? '未知歌单',
         ),
         description: data['info']?.toString() ?? '',
-        songCount: songs.length,
+        songCount: data['total'] ?? songs.length,
         songs: songs,
         coverUrl: data['pic']?.toString() ?? '',
         author: data['uname']?.toString(),
@@ -172,12 +177,14 @@ class KuwoMusicSource implements MusicSourceProvider {
         source: 'kw',
       );
     } catch (e) {
-      return _getPlaylistDetailDigest8(id, tryNum: tryNum + 1);
+      return _getPlaylistDetailDigest8(id, page: page, limit: limit, tryNum: tryNum + 1);
     }
   }
 
   Future<Playlist?> _getPlaylistDetailDigest5(
     String id, {
+    int page = 1,
+    int limit = 100,
     int tryNum = 0,
   }) async {
     if (tryNum > 2) return null;
@@ -200,21 +207,22 @@ class KuwoMusicSource implements MusicSourceProvider {
       final sourceId = child[0]['sourceid']?.toString();
       if (sourceId == null) return null;
 
+      final pn = page - 1;
       final url =
-          'http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid=$sourceId&pn=0&rn=1000&encode=utf-8&keyset=pl2012&identity=kuwo&pcmp4=1&plat=web&from=web&vipver=MUSIC_9.0.5.0_W1&newver=1';
+          'http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid=$sourceId&pn=$pn&rn=$limit&encode=utf-8&keyset=pl2012&identity=kuwo&pcmp4=1&plat=web&from=web&vipver=MUSIC_9.0.5.0_W1&newver=1';
       final response = await _apiService.get(url);
       dynamic data = response.data;
       if (data is String) {
         try {
           data = jsonDecode(data);
         } catch (_) {
-          return _getPlaylistDetailDigest5(id, tryNum: tryNum + 1);
+          return _getPlaylistDetailDigest5(id, page: page, limit: limit, tryNum: tryNum + 1);
         }
       }
       if (data == null)
-        return _getPlaylistDetailDigest5(id, tryNum: tryNum + 1);
+        return _getPlaylistDetailDigest5(id, page: page, limit: limit, tryNum: tryNum + 1);
       if (data['result'] != null && data['result'] != 'ok') {
-        return _getPlaylistDetailDigest5(id, tryNum: tryNum + 1);
+        return _getPlaylistDetailDigest5(id, page: page, limit: limit, tryNum: tryNum + 1);
       }
 
       final list = data['musiclist'] as List? ?? [];
@@ -243,7 +251,7 @@ class KuwoMusicSource implements MusicSourceProvider {
           data['title']?.toString() ?? data['name']?.toString() ?? '未知歌单',
         ),
         description: data['info']?.toString() ?? '',
-        songCount: songs.length,
+        songCount: data['total'] ?? songs.length,
         songs: songs,
         coverUrl: data['pic']?.toString() ?? '',
         author: data['uname']?.toString(),
@@ -251,7 +259,7 @@ class KuwoMusicSource implements MusicSourceProvider {
         source: 'kw',
       );
     } catch (e) {
-      return _getPlaylistDetailDigest5(id, tryNum: tryNum + 1);
+      return _getPlaylistDetailDigest5(id, page: page, limit: limit, tryNum: tryNum + 1);
     }
   }
 
@@ -259,7 +267,7 @@ class KuwoMusicSource implements MusicSourceProvider {
   Future<List<Playlist>> getHotPlaylists() async {
     try {
       final url =
-          'http://wapi.kuwo.cn/api/pc/classify/playlist/getRcmPlayList?loginUid=0&loginSid=0&appUid=76039576&pn=1&rn=20&order=hot';
+          'http://wapi.kuwo.cn/api/pc/classify/playlist/getRcmPlayList?loginUid=0&loginSid=0&appUid=76039576&pn=1&rn=60&order=hot';
       final response = await _apiService.get(url);
       dynamic data = response.data;
       if (data is String) data = jsonDecode(data);
@@ -285,9 +293,11 @@ class KuwoMusicSource implements MusicSourceProvider {
 
   @override
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
-    final playlist = await getPlaylistDetail(playlistId);
+    final playlist = await getPlaylistDetail(playlistId, limit: 10000);
     return playlist?.songs ?? [];
-  }  @override
+  }
+
+  @override
   Future<String?> getSongUrl(String songId) async {
     // 内置源不参与播放，播放只走插件
     return null;

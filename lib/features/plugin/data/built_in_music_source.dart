@@ -42,7 +42,7 @@ class BuiltInMusicSource implements MusicSourceProvider {
   }
 
   @override
-  Future<Playlist?> getPlaylistDetail(String playlistId) async {
+  Future<Playlist?> getPlaylistDetail(String playlistId, {int page = 1, int limit = 100}) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final playlists = await getHotPlaylists();
     return playlists.where((p) => p.id == playlistId).firstOrNull;
@@ -71,7 +71,7 @@ class BuiltInMusicSource implements MusicSourceProvider {
 
   @override
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
-    final playlist = await getPlaylistDetail(playlistId);
+    final playlist = await getPlaylistDetail(playlistId, limit: 10000);
     return playlist?.songs ?? [];
   }
 

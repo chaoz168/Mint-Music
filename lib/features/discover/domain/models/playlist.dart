@@ -26,6 +26,7 @@ class Playlist {
   Playlist copyWith({
     int? songCount,
     String? playCount,
+    List<Song>? songs,
   }) {
     return Playlist(
       id: id,
@@ -33,7 +34,7 @@ class Playlist {
       description: description,
       coverUrl: coverUrl,
       songCount: songCount ?? this.songCount,
-      songs: songs,
+      songs: songs ?? this.songs,
       playCount: playCount ?? this.playCount,
       author: author,
       source: source,

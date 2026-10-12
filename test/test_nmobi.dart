@@ -1,7 +1,6 @@
 // 用 Dio 测试 nmobi.kuwo.cn 接口
 // 运行: dart run test/test_nmobi.dart
 import 'dart:convert';
-import 'dart:io';
 import 'package:dio/dio.dart';
 
 void main() async {

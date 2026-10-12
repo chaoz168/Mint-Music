@@ -45,6 +45,9 @@ class NeteaseMusicSource implements MusicSourceProvider {
 
   String _currentProxyBase = _proxyPrimary;
 
+  /// 歌单全量歌曲缓存（按歌单 cleanId），翻页时直接切片避免重复请求
+  final Map<String, Playlist> _fullPlaylistCache = {};
+
   static const _encryptMagic = '3go8&\$8*3*3h0k(2)2';
 
   String _encryptPicId(String picId) {
@@ -457,37 +460,50 @@ class NeteaseMusicSource implements MusicSourceProvider {
   }
 
   @override
-  Future<Playlist?> getPlaylistDetail(String playlistId) async {
+  Future<Playlist?> getPlaylistDetail(String playlistId, {int page = 1, int limit = 100}) async {
     try {
       final cleanId = playlistId.replaceAll('wy_', '');
 
-      final data = await _request(
-        '/playlist/detail',
-        proxyParams: {'id': cleanId, 'n': '100000', 's': '8'},
-        direct: _DirectApiConfig(_ApiType.linuxapi, '/api/v3/playlist/detail', {
-          'method': 'POST',
-          'url': 'https://music.163.com/api/v3/playlist/detail',
-          'params': {'id': cleanId, 'n': 100000, 's': 8},
-        }),
-      );
+      // 翻页时优先从全量缓存切片，零延迟
+      Playlist? full = _fullPlaylistCache[cleanId];
+      if (full == null) {
+        final data = await _request(
+          '/playlist/detail',
+          proxyParams: {'id': cleanId, 'n': '100000', 's': '8'},
+          direct: _DirectApiConfig(_ApiType.linuxapi, '/api/v3/playlist/detail', {
+            'method': 'POST',
+            'url': 'https://music.163.com/api/v3/playlist/detail',
+            'params': {'id': cleanId, 'n': 100000, 's': 8},
+          }),
+        );
 
-      if (data == null) return null;
-      if (data['code'] != 200) return null;
+        if (data == null) return null;
+        if (data['code'] != 200) return null;
 
-      final playlist = data['playlist'];
-      if (playlist == null) return null;
+        final playlist = data['playlist'];
+        if (playlist == null) return null;
 
-      final songs = _parsePlaylistSongs(playlist);
+        final songs = _parsePlaylistSongs(playlist);
 
-      return Playlist(
-        id: playlistId,
-        title: playlist['name']?.toString() ?? '',
-        description: playlist['description']?.toString() ?? '',
-        coverUrl: _normalizeCoverUrl(playlist['coverImgUrl']),
-        songCount: playlist['trackCount'] ?? songs.length,
-        songs: songs,
-        source: 'wy',
-      );
+        full = Playlist(
+          id: playlistId,
+          title: playlist['name']?.toString() ?? '',
+          description: playlist['description']?.toString() ?? '',
+          coverUrl: _normalizeCoverUrl(playlist['coverImgUrl']),
+          songCount: playlist['trackCount'] ?? songs.length,
+          songs: songs,
+          source: 'wy',
+        );
+        _fullPlaylistCache[cleanId] = full;
+      }
+
+      // 按页切片
+      final start = (page - 1) * limit;
+      final end = (start + limit).clamp(0, full.songs.length);
+      final pageSongs = start < full.songs.length
+          ? full.songs.sublist(start, end)
+          : const <Song>[];
+      return full.copyWith(songs: pageSongs);
     } catch (e) {
       return null;
     }
@@ -498,11 +514,11 @@ class NeteaseMusicSource implements MusicSourceProvider {
     try {
       final data = await _request(
         '/top/playlist',
-        proxyParams: {'limit': '20', 'order': 'hot'},
+        proxyParams: {'limit': '60', 'order': 'hot'},
         direct: _DirectApiConfig(_ApiType.weapi, '/weapi/playlist/list', {
           'cat': '全部',
           'order': 'hot',
-          'limit': 20,
+          'limit': 60,
           'offset': 0,
           'total': true,
         }),
@@ -530,7 +546,7 @@ class NeteaseMusicSource implements MusicSourceProvider {
 
   @override
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
-    final playlist = await getPlaylistDetail(playlistId);
+    final playlist = await getPlaylistDetail(playlistId, limit: 10000);
     return playlist?.songs ?? [];
   }
 

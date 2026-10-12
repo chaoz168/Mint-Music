@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../lib/features/plugin/data/lx_plugin_converter.dart';
+import 'package:mintmusic/features/plugin/data/lx_plugin_converter.dart';
 
 void main() {
   final downloadDir = Directory(r'C:\Users\wujuntao\Downloads');

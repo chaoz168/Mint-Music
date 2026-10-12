@@ -43,9 +43,20 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkIfFavorited();
     });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      final notifier = ref.read(playlistDetailProvider(widget.playlistId).notifier);
+      if (!notifier.noMore && !notifier.loadingMore) {
+        notifier.loadMore();
+      }
+    }
   }
 
   void _checkIfFavorited() {
@@ -409,6 +420,7 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
     }
 
     final selecting = _selection.isActive;
+    final notifier = ref.watch(playlistDetailProvider(widget.playlistId).notifier);
     return ListView.builder(
       controller: _scrollController,
       // 预留迷你播放器高度（56px + 底部 20px 间距），保证最后一首歌曲
@@ -418,13 +430,37 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
             AppSpacing.lg +
             (selecting ? SongBatchActionBar.height : 0),
       ),
-      itemCount: songs.length,
+      itemCount: songs.length + 1,
       // 与定位用的行高常量一致：既避免估算误差累积，也让列表布局从
       // "逐个测量子项"退化成 O(1) 的固定行高布局，长列表滚动更流畅。
       itemExtent: SongListItem.itemExtent,
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
       itemBuilder: (context, index) {
+        if (index == songs.length) {
+          // 底部加载状态
+          return Center(
+            child: notifier.loadingMore
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary),
+                    ),
+                  )
+                : notifier.noMore
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          context.tr('没有更多了'),
+                          style: TextStyle(fontSize: 12, color: colors.textHint),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+          );
+        }
+
         final song = songs[index];
 
         // 高亮当前正在播放的歌曲，与本地音乐页面保持一致

@@ -39,10 +39,82 @@ final searchResultsProvider = FutureProvider<List<Song>>((ref) async {
   return repo.search(query);
 });
 
-final playlistDetailProvider = FutureProvider.family<Playlist?, String>((ref, playlistId) async {
+final playlistDetailProvider = StateNotifierProvider.family<PlaylistDetailNotifier, AsyncValue<Playlist?>, String>((ref, playlistId) {
   final repo = ref.watch(discoverRepositoryProvider);
-  return repo.getPlaylistDetail(playlistId);
+  return PlaylistDetailNotifier(repo, playlistId);
 });
+
+/// 歌单/排行榜详情分页控制器：首屏拉第一页，滚动到底 loadMore() 追加。
+class PlaylistDetailNotifier extends StateNotifier<AsyncValue<Playlist?>> {
+  final DiscoverRepository _repo;
+  final String playlistId;
+
+  PlaylistDetailNotifier(this._repo, this.playlistId)
+      : super(const AsyncValue.loading()) {
+    fetch();
+  }
+
+  static const _pageSize = 50;
+
+  int _page = 1;
+  bool _noMore = false;
+  bool _loadingMore = false;
+  final List<Song> _songs = [];
+  Playlist? _base;
+
+  bool get noMore => _noMore;
+  bool get loadingMore => _loadingMore;
+
+  /// 重新拉取第一页（切换源或下拉刷新时用）
+  Future<void> fetch() async {
+    _page = 1;
+    _noMore = false;
+    _loadingMore = false;
+    _songs.clear();
+    _base = null;
+    state = const AsyncValue.loading();
+    await _loadPage();
+  }
+
+  /// 加载下一页
+  Future<void> loadMore() async {
+    if (_loadingMore || _noMore) return;
+    await _loadPage();
+  }
+
+  Future<void> _loadPage() async {
+    _loadingMore = true;
+    try {
+      final playlist = await _repo.getPlaylistDetail(
+        playlistId,
+        page: _page,
+        limit: _pageSize,
+      );
+      if (playlist == null) {
+        state = AsyncValue.data(_base);
+        _noMore = true;
+        return;
+      }
+
+      // 保留元信息（标题/封面/总数），歌曲累积追加
+      _base ??= playlist;
+      _songs.addAll(playlist.songs);
+      _base = _base!.copyWith(songs: List<Song>.from(_songs));
+      state = AsyncValue.data(_base);
+
+      if (playlist.songs.length < _pageSize ||
+          _songs.length >= playlist.songCount) {
+        _noMore = true;
+      } else {
+        _page++;
+      }
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    } finally {
+      _loadingMore = false;
+    }
+  }
+}
 
 final playlistTagsProvider = FutureProvider<List<PlaylistTagGroup>>((ref) async {
   final repo = ref.watch(discoverRepositoryProvider);

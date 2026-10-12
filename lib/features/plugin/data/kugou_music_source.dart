@@ -26,6 +26,9 @@ dynamic _decodeKugouJson(dynamic raw) {
 class KugouMusicSource implements MusicSourceProvider {
   final MusicApiService _apiService = MusicApiService();
 
+  /// 歌单全量歌曲缓存（按 cleanId），翻页时直接切片
+  final Map<String, Playlist> _fullPlaylistCache = {};
+
   @override
   String get name => 'KuGouMusic';
 
@@ -206,32 +209,45 @@ class KugouMusicSource implements MusicSourceProvider {
   }
 
   @override
-  Future<Playlist?> getPlaylistDetail(String playlistId) async {
-    try {
-      final cleanId = playlistId.replaceAll('kg_', '');
+  Future<Playlist?> getPlaylistDetail(String playlistId, {int page = 1, int limit = 100}) async {
+    final cleanId = playlistId.replaceAll('kg_', '');
 
-      // 纯数字：可能是酷狗码，优先尝试酷狗码解码；失败回退普通歌单ID
-      if (RegExp(r'^\d+$').hasMatch(cleanId)) {
-        try {
-          final decoded = await _getPlaylistByKugouCode(cleanId);
-          if (decoded != null && decoded.songs.isNotEmpty) return decoded;
-          print('[KugouMusicSource] 酷狗码解析无结果，回退歌单ID: $cleanId');
-        } catch (e) {
-          print('[KugouMusicSource] 酷狗码解析失败，回退歌单ID: $e');
+    // 翻页时优先从全量缓存切片
+    Playlist? full = _fullPlaylistCache[cleanId];
+    if (full == null) {
+      try {
+        // 纯数字：可能是酷狗码，优先尝试酷狗码解码；失败回退普通歌单ID
+        if (RegExp(r'^\d+$').hasMatch(cleanId)) {
+          try {
+            final decoded = await _getPlaylistByKugouCode(cleanId);
+            if (decoded != null && decoded.songs.isNotEmpty) full = decoded;
+            print('[KugouMusicSource] 酷狗码解析无结果，回退歌单ID: $cleanId');
+          } catch (e) {
+            print('[KugouMusicSource] 酷狗码解析失败，回退歌单ID: $e');
+          }
+        } else if (_isGcid(cleanId)) {
+          // 手机版分享链接：m.kugou.com/songlist/gcid_xxx
+          final gcidPlaylist = await _getPlaylistByGcid(cleanId);
+          if (gcidPlaylist != null && gcidPlaylist.songs.isNotEmpty) {
+            full = gcidPlaylist;
+          }
         }
-      } else if (_isGcid(cleanId)) {
-        // 手机版分享链接：m.kugou.com/songlist/gcid_xxx
-        final gcidPlaylist = await _getPlaylistByGcid(cleanId);
-        if (gcidPlaylist != null && gcidPlaylist.songs.isNotEmpty) {
-          return gcidPlaylist;
-        }
+
+        full ??= await _getPlaylistDetailBySpecialId(playlistId, cleanId);
+      } catch (e) {
+        full = await _getPlaylistDetailBySpecialId(playlistId, cleanId);
       }
-
-      return await _getPlaylistDetailBySpecialId(playlistId, cleanId);
-    } catch (e) {
-      final cleanId = playlistId.replaceAll('kg_', '');
-      return _getPlaylistDetailBySpecialId(playlistId, cleanId);
+      if (full != null) _fullPlaylistCache[cleanId] = full;
     }
+
+    if (full == null) return null;
+
+    final start = (page - 1) * limit;
+    final end = (start + limit).clamp(0, full.songs.length);
+    final pageSongs = start < full.songs.length
+        ? full.songs.sublist(start, end)
+        : const <Song>[];
+    return full.copyWith(songs: pageSongs);
   }
 
   /// 判断是否为 gcid（手机版歌单分享 ID，形如 3z9vj0yqz4bz00b）
@@ -763,7 +779,7 @@ class KugouMusicSource implements MusicSourceProvider {
         return getHotPlaylists(tryNum: tryNum + 1);
       }
       final specialDb = data['special_db'] as List? ?? [];
-      final playlists = specialDb.take(20).map((item) {
+      final playlists = specialDb.take(60).map((item) {
         return Playlist(
           id: 'kg_${item['specialid']}',
           title: _decodeName(item['specialname']?.toString() ?? ''),
@@ -835,7 +851,7 @@ class KugouMusicSource implements MusicSourceProvider {
 
   @override
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
-    final playlist = await getPlaylistDetail(playlistId);
+    final playlist = await getPlaylistDetail(playlistId, limit: 10000);
     return playlist?.songs ?? [];
   }
 
@@ -1326,6 +1342,10 @@ class KugouMusicSource implements MusicSourceProvider {
   }
 
   @override
+  // 酷狗歌单列表 API 不支持 limit 参数，每页固定返回约 20 条。
+  // 通过多页拼接凑够调用方要求的 limit 条，保证翻页体验与其他源一致。
+  static const int _kgListPageSize = 20;
+
   Future<List<Playlist>> getCategoryPlaylists({
     required String sortId,
     required String tagId,
@@ -1336,39 +1356,55 @@ class KugouMusicSource implements MusicSourceProvider {
       final actualSortId = sortId.isEmpty
           ? '5'
           : (_kugouSortIdMap[sortId] ?? sortId);
-      final url = _getSongListUrl(actualSortId, tagId, page);
-      final response = await _apiService.get(url);
-      dynamic data = response.data;
-      if (data is String) {
-        try {
-          data = jsonDecode(data);
-        } catch (_) {
-          return [];
+      final offset = (page - 1) * limit;
+      final startP = offset ~/ _kgListPageSize + 1;
+      // 多请求 1 页作为缓冲，避免边界刚好缺 1-2 条
+      final pagesNeeded = (limit / _kgListPageSize).ceil() + 1;
+
+      final all = <Playlist>[];
+      for (int p = startP; p < startP + pagesNeeded; p++) {
+        final url = _getSongListUrl(actualSortId, tagId, p);
+        final response = await _apiService.get(url);
+        dynamic data = response.data;
+        if (data is String) {
+          try {
+            data = jsonDecode(data);
+          } catch (_) {
+            break;
+          }
         }
+        if (data == null || data['status'] != 1) break;
+        final infoList = data['special_db'] as List? ?? [];
+        if (infoList.isEmpty) break;
+
+        all.addAll(infoList.map((pl) {
+          return Playlist(
+            id: 'kg_${pl['specialid']}',
+            title: _decodeName(pl['specialname']?.toString() ?? ''),
+            description: _decodeName(pl['intro']?.toString() ?? ''),
+            coverUrl: _normalizeKugouImage(
+              pl['img']?.toString() ?? pl['imgurl']?.toString(),
+              '400',
+            ),
+            songCount: pl['songcount'] ?? pl['song_count'] ?? 0,
+            playCount: _formatPlayCount(
+              pl['total_play_count'] ?? pl['playcount'] ?? pl['play_count'],
+            ),
+            author: pl['username']?.toString(),
+            source: 'kg',
+          );
+        }));
+
+        // 已凑够 offset+limit 条，或酷狗侧本页返回不足一页（无更多）
+        if (all.length >= offset + limit) break;
+        if (infoList.length < _kgListPageSize) break;
       }
-      if (data['status'] != 1) return [];
-      final infoList = data['special_db'] as List? ?? [];
-      final playlists = infoList.map((pl) {
-        return Playlist(
-          id: 'kg_${pl['specialid']}',
-          title: _decodeName(pl['specialname']?.toString() ?? ''),
-          description: _decodeName(pl['intro']?.toString() ?? ''),
-          coverUrl: _normalizeKugouImage(
-            pl['img']?.toString() ?? pl['imgurl']?.toString(),
-            '400',
-          ),
-          songCount: pl['songcount'] ?? pl['song_count'] ?? 0,
-          playCount: _formatPlayCount(
-            pl['total_play_count'] ?? pl['playcount'] ?? pl['play_count'],
-          ),
-          author: pl['username']?.toString(),
-          source: 'kg',
-        );
-      }).toList();
-      if (playlists.isNotEmpty) {
-        await _enrichSongCounts(playlists);
+
+      final result = all.skip(offset).take(limit).toList();
+      if (result.isNotEmpty) {
+        await _enrichSongCounts(result);
       }
-      return playlists;
+      return result;
     } catch (e) {
       return [];
     }
@@ -1385,57 +1421,109 @@ class KugouMusicSource implements MusicSourceProvider {
 
   static const _kugouSortIdMap = {'hot': '6', 'new': '7', 'recommend': '5'};
 
+  /// 酷狗榜单权威列表（对照落雪音乐 kg/leaderboard.js boardList，共 56 个）
+  static const _kugouBoards = <(String, String)>[
+    ('8888', 'TOP500'),
+    ('6666', '飙升榜'),
+    ('59703', '蜂鸟流行音乐榜'),
+    ('52144', '抖音热歌榜'),
+    ('52767', '快手热歌榜'),
+    ('24971', 'DJ热歌榜'),
+    ('23784', '网络红歌榜'),
+    ('44412', '说唱先锋榜'),
+    ('31308', '内地榜'),
+    ('33160', '电音榜'),
+    ('31313', '香港地区榜'),
+    ('51341', '民谣榜'),
+    ('54848', '台湾地区榜'),
+    ('31310', '欧美榜'),
+    ('33162', 'ACG新歌榜'),
+    ('31311', '韩国榜'),
+    ('31312', '日本榜'),
+    ('49225', '80后热歌榜'),
+    ('49223', '90后热歌榜'),
+    ('49224', '00后热歌榜'),
+    ('33165', '粤语金曲榜'),
+    ('33166', '欧美金曲榜'),
+    ('33163', '影视金曲榜'),
+    ('51340', '伤感榜'),
+    ('35811', '会员专享榜'),
+    ('37361', '雷达榜'),
+    ('21101', '分享榜'),
+    ('46910', '综艺新歌榜'),
+    ('30972', '酷狗音乐人原创榜'),
+    ('60170', '闽南语榜'),
+    ('65234', '儿歌榜'),
+    ('4681', '美国BillBoard榜'),
+    ('25028', 'Beatport电子舞曲榜'),
+    ('4680', '英国单曲榜'),
+    ('38623', '韩国Melon音乐榜'),
+    ('42807', 'joox本地热歌榜'),
+    ('36107', '小语种热歌榜'),
+    ('4673', '日本公信榜'),
+    ('46868', '日本SPACE SHOWER榜'),
+    ('42808', 'KKBOX风云榜'),
+    ('60171', '越南语榜'),
+    ('60172', '泰语榜'),
+    ('59895', 'R&B榜'),
+    ('59896', '摇滚榜'),
+    ('59897', '爵士榜'),
+    ('59898', '乡村音乐榜'),
+    ('59900', '纯音乐榜'),
+    ('59899', '古典榜'),
+    ('22603', '5sing音乐榜'),
+    ('21335', '繁星音乐榜'),
+    ('33161', '古风新歌榜'),
+  ];
+
   @override
   Future<List<Leaderboard>> getLeaderboards() async {
+    // 先用硬编码权威列表（对照落雪音乐），保证榜单完整且稳定
+    final boards = _kugouBoards.map((e) {
+      return Leaderboard(
+        id: 'kg_${e.$1}',
+        name: e.$2,
+        source: 'kg',
+      );
+    }).toList();
+
+    // 尝试从 API 补充封面、播放量、更新频率等元数据（失败不影响列表完整性）
     try {
       final response = await _apiService.get(
         'http://mobilecdnbj.kugou.com/api/v5/rank/list?version=9108&plat=0&showtype=2&parentid=0&apiver=6&area_code=1&withsong=1',
       );
       final raw = response.data;
       final data = raw is String ? jsonDecode(raw) : raw;
-      if (data == null || (data['errcode'] != 0 && data['status'] != 1)) {
-        return _fallbackLeaderboards();
-      }
-      final infoList = data['data']?['info'] as List? ?? [];
-      final result = infoList
-          .where((item) => item is Map && item['isvol']?.toString() == '1')
-          .map((item) {
-            final cover =
-                item['banner_9']?.toString() ??
-                item['table_plaque']?.toString() ??
-                item['album_img_9']?.toString();
-            return Leaderboard(
-              id: 'kg_${item['rankid'] ?? item['id']}',
-              name: item['rankname']?.toString() ?? '',
+      if (data != null && (data['errcode'] == 0 || data['status'] == 1)) {
+        final infoList = data['data']?['info'] as List? ?? [];
+        final apiMap = <String, Map>{};
+        for (final item in infoList) {
+          if (item is Map) {
+            final rankId = item['rankid']?.toString();
+            if (rankId != null) apiMap[rankId] = item as Map;
+          }
+        }
+        for (int i = 0; i < boards.length; i++) {
+          final api = apiMap[boards[i].id.replaceAll('kg_', '')];
+          if (api != null) {
+            final cover = api['banner_9']?.toString() ??
+                api['table_plaque']?.toString() ??
+                api['album_img_9']?.toString();
+            boards[i] = boards[i].copyWith(
               coverUrl: _normalizeKugouImage(cover, '400'),
-              playCount: _formatPlayCount(item['play_times']),
-              // update_frequency 是文本（如「每天」）；update_frequency_type
-              // 是数字码（0/1/2…），直接显示会被误当成歌曲数量。
+              playCount: _formatPlayCount(api['play_times']),
               updateFrequency: _nonEmptyOrNull(
-                item['update_frequency']?.toString(),
+                api['update_frequency']?.toString(),
               ),
-              source: 'kg',
             );
-          })
-          .toList();
-      return result.isNotEmpty ? result : _fallbackLeaderboards();
-    } catch (e) {
-      return _fallbackLeaderboards();
+          }
+        }
+      }
+    } catch (_) {
+      // API 失败不影响列表展示
     }
-  }
 
-  List<Leaderboard> _fallbackLeaderboards() {
-    return const [
-      Leaderboard(id: 'kg_8888', name: 'TOP500', source: 'kg'),
-      Leaderboard(id: 'kg_6666', name: '飙升榜', source: 'kg'),
-      Leaderboard(id: 'kg_59703', name: '蜂鸟流行音乐榜', source: 'kg'),
-      Leaderboard(id: 'kg_52144', name: '抖音热歌榜', source: 'kg'),
-      Leaderboard(id: 'kg_24971', name: 'DJ热歌榜', source: 'kg'),
-      Leaderboard(id: 'kg_23784', name: '网络红歌榜', source: 'kg'),
-      Leaderboard(id: 'kg_31308', name: '内地榜', source: 'kg'),
-      Leaderboard(id: 'kg_31310', name: '欧美榜', source: 'kg'),
-      Leaderboard(id: 'kg_33160', name: '电影榜', source: 'kg'),
-    ];
+    return boards;
   }
 
   @override

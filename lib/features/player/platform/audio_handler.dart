@@ -388,7 +388,7 @@ class MusicAudioHandler extends BaseAudioHandler
           if (bytes != null && bytes.isNotEmpty) {
             // 写入播放器专用的缓存目录（供 MediaSession 使用）
             final coverDir = await _getCoverCacheDir();
-            final coverPath = '${coverDir!.path}/${song.id}.jpg';
+            final coverPath = '${coverDir.path}/${song.id}.jpg';
             if (!await File(coverPath).exists()) {
               await File(coverPath).writeAsBytes(bytes);
             }

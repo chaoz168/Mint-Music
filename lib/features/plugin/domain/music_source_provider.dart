@@ -8,7 +8,7 @@ abstract class MusicSourceProvider {
   String get version;
 
   Future<List<Song>> search(String query, {int page = 1, int limit = 20});
-  Future<Playlist?> getPlaylistDetail(String playlistId);
+  Future<Playlist?> getPlaylistDetail(String playlistId, {int page = 1, int limit = 100});
   Future<List<Playlist>> getHotPlaylists();
   Future<List<Song>> getPlaylistSongs(String playlistId);
   Future<String?> getSongUrl(String songId);

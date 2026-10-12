@@ -57,7 +57,7 @@ class DiscoverRepository {
     return _manager.getSearchSuggestions(query);
   }
 
-  Future<Playlist?> getPlaylistDetail(String playlistId) async {
-    return _manager.getPlaylistDetail(playlistId);
+  Future<Playlist?> getPlaylistDetail(String playlistId, {int page = 1, int limit = 100}) async {
+    return _manager.getPlaylistDetail(playlistId, page: page, limit: limit);
   }
 }

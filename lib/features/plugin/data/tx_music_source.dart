@@ -113,11 +113,12 @@ class QQMusicSource implements MusicSourceProvider {
   }
 
   @override
-  Future<Playlist?> getPlaylistDetail(String playlistId) async {
+  Future<Playlist?> getPlaylistDetail(String playlistId, {int page = 1, int limit = 100}) async {
     try {
       final cleanId = playlistId.replaceAll('tx_', '');
+      final songBegin = (page - 1) * limit;
       final url =
-          'https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=$cleanId&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0';
+          'https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&new_format=1&disstid=$cleanId&song_begin=$songBegin&song_num=$limit&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0';
 
       final response = await _apiService.get(
         url,
@@ -201,7 +202,7 @@ class QQMusicSource implements MusicSourceProvider {
         id: playlistId,
         title: cd['dissname']?.toString() ?? '未知歌单',
         description: cd['desc']?.toString() ?? '',
-        songCount: songs.length,
+        songCount: cd['total_song_num'] ?? songs.length,
         songs: songs,
         coverUrl: playlistCoverUrl,
         source: 'tx',
@@ -222,7 +223,7 @@ class QQMusicSource implements MusicSourceProvider {
           'param': {
             'id': 10000000,
             'sin': 0,
-            'size': 20,
+            'size': 60,
             'order': 5,
             'cur_page': 1,
           },
@@ -271,7 +272,7 @@ class QQMusicSource implements MusicSourceProvider {
 
   @override
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
-    final playlist = await getPlaylistDetail(playlistId);
+    final playlist = await getPlaylistDetail(playlistId, limit: 10000);
     return playlist?.songs ?? [];
   }
 

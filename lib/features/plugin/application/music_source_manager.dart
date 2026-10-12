@@ -1643,12 +1643,28 @@ class MusicSourceManager {
         );
       }
 
-      if (page == 1 && tagId.isEmpty && sortId == 'hot') {
+      // 分类歌单接口返回空时，兜底用热门歌单（按页切片，支持翻页）
+      if (tagId.isEmpty && sortId == 'hot') {
         try {
-          final hot = await builtIn.getHotPlaylists();
-          if (hot.isNotEmpty) return hot.take(limit).toList();
+          final cacheKey = 'fallback_hot_$sourceId';
+          List<Playlist> allFallback = [];
+          final cached = _hotPlaylistsCache[cacheKey];
+          if (cached != null && cached.isValid) {
+            allFallback = cached.data;
+          } else {
+            allFallback = await builtIn.getHotPlaylists();
+            _hotPlaylistsCache[cacheKey] = _CacheEntry(
+              allFallback,
+              _playlistDetailTTL,
+            );
+          }
+          final start = (page - 1) * limit;
+          final end = (start + limit).clamp(0, allFallback.length);
+          if (start < allFallback.length) {
+            return allFallback.sublist(start, end);
+          }
         } catch (e) {
-          print('[MusicSourceManager] 分类热门歌单直接兜底失败 source=$sourceId: $e');
+          print('[MusicSourceManager] 热门歌单兜底失败 source=$sourceId: $e');
         }
 
         try {
@@ -1685,12 +1701,17 @@ class MusicSourceManager {
 
   Future<Playlist?> getPlaylistDetail(
     String playlistId, {
+    int page = 1,
+    int limit = 100,
     String sourceId = 'wy',
   }) async {
-    final cached = _playlistDetailCache[playlistId];
-    if (cached != null && cached.isValid) {
-      print('[MusicSourceManager] 歌单详情缓存命中: $playlistId');
-      return cached.data;
+    // 仅第一页走缓存；翻页请求直接透传避免覆盖全量缓存
+    if (page == 1) {
+      final cached = _playlistDetailCache[playlistId];
+      if (cached != null && cached.isValid) {
+        print('[MusicSourceManager] 歌单详情缓存命中: $playlistId');
+        return cached.data;
+      }
     }
 
     String actualSourceId = sourceId;
@@ -1708,35 +1729,39 @@ class MusicSourceManager {
     }
 
     print(
-      '[MusicSourceManager] getPlaylistDetail: playlistId=$playlistId, sourceId=$sourceId, actualSourceId=$actualSourceId',
+      '[MusicSourceManager] getPlaylistDetail: playlistId=$playlistId, sourceId=$sourceId, actualSourceId=$actualSourceId, page=$page, limit=$limit',
     );
 
     Playlist? result;
     final builtIn = _builtInSources[actualSourceId];
     if (builtIn != null) {
       try {
-        result = await builtIn.getPlaylistDetail(playlistId);
+        result = await builtIn.getPlaylistDetail(playlistId, page: page, limit: limit);
         if (result != null && result.songs.isNotEmpty) {
           print(
             '[MusicSourceManager] getPlaylistDetail success: ${result.songs.length} songs',
           );
-          _playlistDetailCache[playlistId] = _CacheEntry(
-            result,
-            _playlistDetailTTL,
-          );
+          if (page == 1) {
+            _playlistDetailCache[playlistId] = _CacheEntry(
+              result,
+              _playlistDetailTTL,
+            );
+          }
           return result;
         }
 
         if (actualSourceId != 'wy') {
-          final boardResult = await builtIn.getLeaderboardDetail(playlistId);
+          final boardResult = await builtIn.getLeaderboardDetail(playlistId, page: page);
           if (boardResult != null && boardResult.songs.isNotEmpty) {
             print(
               '[MusicSourceManager] getPlaylistDetail fallback leaderboard success: ${boardResult.songs.length} songs',
             );
-            _playlistDetailCache[playlistId] = _CacheEntry(
-              boardResult,
-              _playlistDetailTTL,
-            );
+            if (page == 1) {
+              _playlistDetailCache[playlistId] = _CacheEntry(
+                boardResult,
+                _playlistDetailTTL,
+              );
+            }
             return boardResult;
           }
         }
@@ -1745,10 +1770,12 @@ class MusicSourceManager {
           print(
             '[MusicSourceManager] getPlaylistDetail returned empty playlist for $actualSourceId',
           );
-          _playlistDetailCache[playlistId] = _CacheEntry(
-            result,
-            _playlistDetailTTL,
-          );
+          if (page == 1) {
+            _playlistDetailCache[playlistId] = _CacheEntry(
+              result,
+              _playlistDetailTTL,
+            );
+          }
           return result;
         } else {
           print(

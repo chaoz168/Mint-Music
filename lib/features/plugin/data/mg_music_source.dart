@@ -33,11 +33,11 @@ class MiguMusicSource implements MusicSourceProvider {
   }
 
   @override
-  Future<Playlist?> getPlaylistDetail(String playlistId) async {
+  Future<Playlist?> getPlaylistDetail(String playlistId, {int page = 1, int limit = 100}) async {
     try {
       final cleanId = playlistId.replaceAll('mg_', '');
       final response = await _apiService.get(
-        'https://app.c.nf.migu.cn/MIGUM3.0/resource/playlist/song/v2.0?pageNo=1&pageSize=100&playlistId=$cleanId',
+        'https://app.c.nf.migu.cn/MIGUM3.0/resource/playlist/song/v2.0?pageNo=$page&pageSize=$limit&playlistId=$cleanId',
         headers: _defaultHeaders,
       );
       final data = response.data;
@@ -64,7 +64,7 @@ class MiguMusicSource implements MusicSourceProvider {
             data['data']?['title']?.toString() ??
             '歌单',
         description: info?['summary']?.toString() ?? '',
-        songCount: songs.length,
+        songCount: info?['songCount'] ?? songs.length,
         songs: songs,
         coverUrl:
             info?['imgItem']?['img']?.toString() ??
@@ -163,7 +163,7 @@ class MiguMusicSource implements MusicSourceProvider {
 
       return _parsePlaylistSquareContents(
         data['data']?['contents'],
-      ).take(30).toList();
+      ).take(60).toList();
     } catch (e) {
       return [];
     }
@@ -226,7 +226,7 @@ class MiguMusicSource implements MusicSourceProvider {
 
   @override
   Future<List<Song>> getPlaylistSongs(String playlistId) async {
-    final playlist = await getPlaylistDetail(playlistId);
+    final playlist = await getPlaylistDetail(playlistId, limit: 10000);
     return playlist?.songs ?? [];
   }
 
@@ -615,7 +615,26 @@ class MiguMusicSource implements MusicSourceProvider {
     required int page,
     required int limit,
   }) async {
-    return getHotPlaylists();
+    try {
+      final url =
+          'https://app.c.nf.migu.cn/pc/bmw/page-data/playlist-square-recommend/v1.0?templateVersion=2&pageNo=$page';
+      final response = await _apiService.get(
+        url,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1',
+          'Referer': 'https://m.music.migu.cn/',
+        },
+      );
+      final data = response.data;
+      if (data == null || data['code'] != '000000') return [];
+
+      return _parsePlaylistSquareContents(
+        data['data']?['contents'],
+      ).take(limit).toList();
+    } catch (e) {
+      return [];
+    }
   }
 
   @override
