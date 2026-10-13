@@ -1068,13 +1068,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               showQuality: true,
               showDuration: true,
               showMenuButton: true,
-              // 「播放」= 搜索结果全部加入队列并从该曲开始依次播放；
-              // 「播放并替换播放列表」= 只播这一首并清空队列。
+              // 主操作为「下一首播放」：插到当前播放歌曲之后，
+              // 不会把播放队列替换成全部搜索结果。
               onMenuTap: () => SongActionSheet.show(
                 context,
                 song: song,
-                playlistSongs: songs,
-                showPlayAndReplaceQueue: true,
+                showPlayNextInsteadOfPlay: true,
               ),
               onPlayTap: () async {
                 final now = DateTime.now();
@@ -1182,13 +1181,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           showQuality: true,
           showDuration: true,
           showMenuButton: true,
-          // 「播放」= 搜索结果全部加入队列并从该曲开始依次播放；
-          // 「播放并替换播放列表」= 只播这一首并清空队列。
+          // 主操作为「下一首播放」：插到当前播放歌曲之后，
+          // 不会把播放队列替换成全部搜索结果。
           onMenuTap: () => SongActionSheet.show(
             context,
             song: song,
-            playlistSongs: songs,
-            showPlayAndReplaceQueue: true,
+            showPlayNextInsteadOfPlay: true,
           ),
           selectionMode: selecting,
           selected: _selection.isSelected(song.id),

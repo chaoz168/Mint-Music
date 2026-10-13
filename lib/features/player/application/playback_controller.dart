@@ -226,6 +226,9 @@ class PlaybackController extends StateNotifier<PlaybackState> {
   String? _pendingRestoreSongId;
   Timer? _saveTimer;
   Timer? _loadingTimer;
+
+  /// 看门狗武装时记录的播放位置，用于判断是否真的「没有进度」。
+  Duration? _stallBaselinePosition;
   static const Duration _saveInterval = Duration(seconds: 5);
   static const Duration _loadingTimeout = Duration(seconds: 30);
 
@@ -321,6 +324,61 @@ class PlaybackController extends StateNotifier<PlaybackState> {
   void _stopSaveTimer() {
     _saveTimer?.cancel();
     _saveTimer = null;
+  }
+
+  /// 武装「加载卡死」看门狗。
+  ///
+  /// 原实现有两个问题，导致「切后台后当前播放会停止」这种偶发问题：
+  /// 1. 用 `??=` 武装，Timer 触发后 `_loadingTimer` 仍非 null（非空但已过期），
+  ///    之后再进入 loading 也永远不会重新计时，看门狗实质只生效一次；
+  /// 2. 只要 `processingState == loading` 就算「卡死」。而 App 切到后台时，
+  ///    Android 会重配音频路由 / 回收解码器，ExoPlayer 很容易短暂回到
+  ///    `loading`——这是正常现象。原来的逻辑会在后台 30s 后把这首歌判死，
+  ///    强制 `isPlaying = false` 并跳歌；队列只有一首时 `next()` 会直接
+  ///    `pause()`，于是表现为「切后台后播放停了」。
+  ///
+  /// 现在改为：重新计时 + 记录基准进度 + 真正「没有进度」才算卡死，
+  /// 并且 App 不在前台时一律不判定。
+  void _armStallWatchdog() {
+    _loadingTimer?.cancel();
+    _stallBaselinePosition = state.position;
+    _loadingTimer = Timer(_loadingTimeout, _onStallTimeout);
+  }
+
+  void _onStallTimeout() {
+    // 置空后才能在下次 loading 时重新武装。
+    _loadingTimer = null;
+    if (!mounted || state.currentSong == null) return;
+    // 已经恢复播放/不再加载，无需继续看门狗。
+    if (!state.isLoading) {
+      _stallBaselinePosition = null;
+      return;
+    }
+
+    // App 不在前台时不判定卡死：此时 loading 多为音频路由重配的正常抖动。
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    final inForeground =
+        lifecycle == null || lifecycle == AppLifecycleState.resumed;
+
+    // 必须「进度完全没动」才算卡死；仅仅处于 loading 可能只是缓冲偏慢。
+    final baseline = _stallBaselinePosition;
+    final noProgress = baseline == null || state.position <= baseline;
+
+    if (!inForeground || !noProgress) {
+      // 不跳歌，但只要还卡在 loading 就继续重新武装，保证回到前台后
+      // 看门狗依然有效（否则后台这段时间里它就永久失效了）。
+      if (state.currentSong != null) _armStallWatchdog();
+      return;
+    }
+
+    debugPrint(
+      '[PlaybackController] 加载超时（${_loadingTimeout.inSeconds}s）且无进度，尝试跳过',
+    );
+    _stallBaselinePosition = null;
+    // 只清 isLoading，不要顺手把 isPlaying 打成 false——那会让正在播放的
+    // 声音直接停住，交给 _tryAutoNext/next() 按播放模式决定跳过还是暂停。
+    state = state.copyWith(isLoading: false);
+    _tryAutoNext('播放加载超时');
   }
 
   /// 启动时恢复上次播放会话（CeruMusic 风格：仅恢复队列+UI，不获取 URL）
@@ -541,18 +599,11 @@ class PlaybackController extends StateNotifier<PlaybackState> {
       final isLoading = processingState == ProcessingState.loading;
 
       if (isLoading) {
-        _loadingTimer ??= Timer(_loadingTimeout, () {
-          if (mounted && state.isLoading) {
-            debugPrint(
-              '[PlaybackController] 加载超时（${_loadingTimeout.inSeconds}s），尝试跳过',
-            );
-            state = state.copyWith(isLoading: false, isPlaying: false);
-            _tryAutoNext('播放加载超时');
-          }
-        });
+        _armStallWatchdog();
       } else {
         _loadingTimer?.cancel();
         _loadingTimer = null;
+        _stallBaselinePosition = null;
       }
 
       final wasPlaying = state.isPlaying;
@@ -1308,6 +1359,9 @@ class PlaybackController extends StateNotifier<PlaybackState> {
     _pendingRestorePosition = null;
     _pendingRestoreSongId = null;
     onClearPlaybackState?.call();
+    // 用户主动起播 → 解除 clearQueue() 设置的会话屏蔽，
+    // 否则 playSongAt 里的 setAudioSource 会被忽略、根本播不出声音。
+    _audioHandler.markSessionActive();
     _settingQueue = true;
     final index = startIndex.clamp(0, songs.length - 1);
 
@@ -1373,6 +1427,9 @@ class PlaybackController extends StateNotifier<PlaybackState> {
     _pendingRestorePosition = null;
     _pendingRestoreSongId = null;
     onClearPlaybackState?.call();
+    // 用户主动起播 → 解除 clearQueue() 设置的会话屏蔽，
+    // 否则紧随其后的 setAudioSource 会被忽略。
+    _audioHandler.markSessionActive();
     final resolved = [song];
     final newQueue = List<Song>.from(state.queue);
     newQueue.insertAll(0, resolved);
@@ -1423,18 +1480,39 @@ class PlaybackController extends StateNotifier<PlaybackState> {
 
   /// 清空队列
   ///
-  /// 需要三件事同时发生，否则会出现「幽灵播放」：
-  /// 1. 复位 [state]，让 5s 一次的保存定时器立刻短路，不再写盘；
-  /// 2. 清掉持久化的 `last_playback_state`，否则下次启动会把旧队列复活；
-  /// 3. 清空媒体会话，让通知栏/系统媒体控制不再显示已删除的曲目。
+  /// 顺序参照 MusicFree 的 `TrackPlayer.clearPlayList()`：
+  /// 先清播放列表与当前曲目，再硬重置底层播放器，最后清持久化状态。
+  ///
+  /// 最关键的一步是 [_currentPlayRequestId] 自增 + 取消 [_errorListenerSub]：
+  /// `playSongAt` / `setQuality` 内部有 300ms 防抖和最长 12s 的取URL/换源
+  /// 异步过程，只靠 `requestId` 守卫来放弃过期操作。如果这里不把它们作废，
+  /// 在途的请求会在 await 之后继续 `setAudioSource`：
+  ///   · 重新点亮通知栏（旧曲目 + 可点的播放键）→ 正是「清空后通知栏还在、
+  ///     点播放还能继续播」的根因；
+  ///   · 队列已空时 `state.queue.length <= 1` 成立 → 弹出「播放中断，请手动重试」。
   Future<void> clearQueue() async {
+    // 1) 作废所有在途的加载 / 换源 / 音质切换请求
+    _currentPlayRequestId++;
+    _qualitySwitchRequestId = null;
+    unawaited(_errorListenerSub?.cancel());
+    _errorListenerSub = null;
+    _activeSourceIds = [];
+    _justCompleted = false;
     _cancelPendingAutoNext();
+    _needsUrlRefresh = false;
+    _loadingTimer?.cancel();
+    _loadingTimer = null;
+    _stallBaselinePosition = null;
     // 用户主动清空，不应用待恢复进度
     _pendingRestorePosition = null;
     _pendingRestoreSongId = null;
-    // 先断开源状态，再清持久化，避免保存定时器在两者之间把旧队列写回去。
+
+    // 2) 复位状态（保存定时器随即短路，不再写盘），再清持久化，
+    //避免保存定时器在两者之间把旧队列写回去。
     state = const PlaybackState();
     onClearPlaybackState?.call();
+
+    // 3) 硬重置媒体会话：停播 + 卸音源 + 清 queue/mediaItem，通知栏同步消失
     await _audioHandler.clearMediaSession();
   }
 

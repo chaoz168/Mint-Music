@@ -129,15 +129,15 @@ class SongActionSheet extends ConsumerStatefulWidget {
   final VoidCallback? onDelete;
   final bool compactMode;
 
-  /// 是否在「播放」下方额外展示「播放并替换播放列表」。
+  /// 首个主操作是否用「下一首播放」取代「播放」。
   ///
-  /// - `false`（默认）：只显示「播放」，其行为由 [playlistSongs] 决定
+  /// - `false`（默认）：显示「播放」，行为由 [playlistSongs] 决定
   ///   （传入列表 = 整张列表依次播放，否则仅播放当前这一首）。
-  /// - `true`：额外提供「播放并替换播放列表」，无视 [playlistSongs]，
-  ///   强制把播放队列替换为仅包含当前这一首。
+  /// - `true`：显示「下一首播放」，把当前歌曲插到播放队列中「正在播放的那首」
+  ///   之后，**不会**替换播放队列（队列为空时才会直接开始播放它）。
   ///
-  /// 仅搜索结果这类「列表很长、只想单曲立即试听」的场景需要开启。
-  final bool showPlayAndReplaceQueue;
+  /// 语义对齐 MusicFree 的 `TrackPlayer.addNext`。
+  final bool showPlayNextInsteadOfPlay;
 
   const SongActionSheet({
     super.key,
@@ -150,7 +150,7 @@ class SongActionSheet extends ConsumerStatefulWidget {
     this.showDelete = false,
     this.onDelete,
     this.compactMode = false,
-    this.showPlayAndReplaceQueue = false,
+    this.showPlayNextInsteadOfPlay = false,
   });
 
   static Future<void> show(
@@ -163,7 +163,7 @@ class SongActionSheet extends ConsumerStatefulWidget {
     VoidCallback? onAccurateMatch,
     bool showDelete = false,
     VoidCallback? onDelete,
-    bool showPlayAndReplaceQueue = false,
+    bool showPlayNextInsteadOfPlay = false,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -180,7 +180,7 @@ class SongActionSheet extends ConsumerStatefulWidget {
         onAccurateMatch: onAccurateMatch,
         showDelete: showDelete,
         onDelete: onDelete,
-        showPlayAndReplaceQueue: showPlayAndReplaceQueue,
+        showPlayNextInsteadOfPlay: showPlayNextInsteadOfPlay,
       ),
     );
   }
@@ -300,18 +300,19 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
                 ],
                 // --- Full mode (song context menu) ---
                 if (!widget.compactMode) ...[
-                  _buildActionItem(
-                    colors: colors,
-                    icon: Icons.play_circle_outline,
-                    label: context.tr('播放'),
-                    onTap: _play,
-                  ),
-                  if (widget.showPlayAndReplaceQueue)
+                  if (widget.showPlayNextInsteadOfPlay)
                     _buildActionItem(
                       colors: colors,
                       icon: Icons.playlist_play,
-                      label: context.tr('播放并替换播放列表'),
-                      onTap: _playAndReplaceQueue,
+                      label: context.tr('下一首播放'),
+                      onTap: _playNext,
+                    )
+                  else
+                    _buildActionItem(
+                      colors: colors,
+                      icon: Icons.play_circle_outline,
+                      label: context.tr('播放'),
+                      onTap: _play,
                     ),
                   _buildActionItem(
                     colors: colors,
@@ -1360,11 +1361,29 @@ class _SongActionSheetState extends ConsumerState<SongActionSheet> {
     );
   }
 
-  /// 「播放并替换播放列表」：无视 [playlistSongs]，把播放队列替换为仅当前这一首。
-  Future<void> _playAndReplaceQueue() async {
+  /// 「下一首播放」：把当前歌曲插到播放队列中「正在播放的那一首」之后。
+  ///
+  /// 播放队列**不会**被替换，也不会立刻切歌；只有队列为空（没有任何正在
+  /// 播放的歌曲）时才直接开始播放它。语义对齐 MusicFree 的
+  /// `TrackPlayer.addNext`（`add(item, currentIndex + 1)`）。
+  Future<void> _playNext() async {
+    // 先取好 messenger / 文案：_buildActionItem 会先 pop 掉本弹层，
+    // await 之后 context 已失效，不能再用它去找 ScaffoldMessenger。
+    final messenger = ScaffoldMessenger.of(context);
+    final message = context.tr('已添加到下一首播放');
+
+    final playback = ref.read(playbackControllerProvider);
+    final willAutoPlay = playback.queue.isEmpty || playback.currentSong == null;
+
     await ref
         .read(playbackControllerProvider.notifier)
-        .setQueue([widget.song]);
+        .insertNext([widget.song]);
+
+    // 队列原本为空 → insertNext 直接开始播放了，无需再提示「已添加」。
+    if (willAutoPlay) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
   }
 
   void _toggleFavorite() {

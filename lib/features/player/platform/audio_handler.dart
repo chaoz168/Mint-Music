@@ -37,6 +37,33 @@ class MusicAudioHandler extends BaseAudioHandler
   ProcessingState _lastProcessingState = ProcessingState.idle;
   bool _errorMonitoring = false;
 
+  /// 清空媒体会话期间屏蔽状态广播，见 [clearMediaSession]。
+  bool _suppressBroadcast = false;
+
+  /// 会话是否已被清空。
+  ///
+  /// 清空播放列表后，任何**残留的在途请求**（取URL / 自动换源 / 音质切换，
+  /// 这些流程里有十几处 `await`，无法只靠调用点的 requestId 守卫全部覆盖）
+  /// 恢复执行时都会调用 [setAudioSource] / [setSource]，把已经删除的曲目
+  /// 重新写回通知栏，并让系统媒体控制重新「可播放」。这里直接把它们全部忽略，
+  /// 直到用户主动建立新的播放列表（[setQueue] / [markSessionActive]）。
+  bool _sessionCleared = false;
+
+  /// 声明会话有效（用户主动开启了新的播放）。
+  ///
+  /// [setQueue] 内部会自动调用；[MusicAudioHandler.prependAndPlay] 这类
+  /// 不经过 [setQueue] 的入口需要由 `PlaybackController` 显式调用一次。
+  void markSessionActive() {
+    _sessionCleared = false;
+  }
+
+  /// 「无曲目」时的干净播放状态：不带任何控件 + idle。
+  ///
+  /// [PlaybackState] 的默认值（`controls: const []`、`systemActions: const {}`、
+  /// `playing: false`、`processingState: idle`）正好就是我们要的，
+  /// 直接用默认构造即可。它的构造函数不是 const，所以不能写成 `const`。
+  static final PlaybackState _emptyPlaybackState = PlaybackState();
+
   /// 通知栏控制回调（由 PlaybackController 设置）
   VoidCallback? onSkipNext;
   VoidCallback? onSkipPrevious;
@@ -79,6 +106,15 @@ class MusicAudioHandler extends BaseAudioHandler
   }
 
   void _broadcastState() {
+    // 清空会话时不要把「带控件的播放状态」推回去，否则通知栏会被重新点亮。
+    if (_suppressBroadcast) return;
+    // 没有任何曲目时只广播「无控件 + idle」状态。清空播放列表后，
+    // _player 仍会吐出零星的位置/状态事件，若此时照常广播带控件的状态，
+    // audio_service 会把通知栏重新点亮（旧曲目 + 可点的播放键）。
+    if (mediaItem.value == null || queue.value.isEmpty) {
+      playbackState.add(_emptyPlaybackState);
+      return;
+    }
     final processingState = _mapProcessingState(_player.processingState);
     playbackState.add(
       PlaybackState(
@@ -140,6 +176,25 @@ class MusicAudioHandler extends BaseAudioHandler
 
     session.becomingNoisyEventStream.listen((_) {
       pause();
+    });
+
+    // 此前完全没有订阅 interruptionEventStream：来电、导航播报、其它 App
+    // 抢音频焦点等中断事件被静默丢弃。系统此时已经把 ExoPlayer 停掉，而 App
+    // 侧状态仍是「播放中」，表现就是「切后台后播放莫名停住/停掉」。
+    session.interruptionEventStream.listen((event) {
+      if (event.begin) {
+        // duck 只是系统临时压低音量（导航播报），并未停止播放，不要暂停。
+        // pause 才是真正被中断（来电等），按预期暂停。
+        if (event.type == AudioInterruptionType.pause) {
+          pause();
+        }
+      } else {
+        // 中断结束。若我们从未收到暂停事件（短暂的焦点抢占，切后台时最常见），
+        // 说明 App 侧一直以为在播放，这里补一次恢复，避免停播后不再自动继续。
+        if (playbackState.value.playing) {
+          play();
+        }
+      }
     });
   }
 
@@ -248,6 +303,8 @@ class MusicAudioHandler extends BaseAudioHandler
     debugPrint(
       'MusicAudioHandler: 设置播放队列 - ${songs.length}首, 起始索引: $startIndex',
     );
+    // 用户主动建立新队列 → 会话恢复有效。
+    _sessionCleared = false;
 
     final processedSongs = await _prepareLocalCovers(
       songs,
@@ -342,6 +399,11 @@ class MusicAudioHandler extends BaseAudioHandler
   Future<void> setSource(Song song) async {
     debugPrint('MusicAudioHandler: 开始设置音源 - 歌曲: ${song.title}');
 
+    if (_sessionCleared) {
+      debugPrint('MusicAudioHandler: 会话已清空，忽略过期的 setSource');
+      return;
+    }
+
     if (song.sourceUrl != null) {
       debugPrint('MusicAudioHandler: 音源URL: ${song.sourceUrl}');
 
@@ -376,6 +438,11 @@ class MusicAudioHandler extends BaseAudioHandler
     debugPrint(
       'MusicAudioHandler: 设置音频源: ${url.substring(0, url.length > 60 ? 60 : url.length)}...',
     );
+
+    if (_sessionCleared) {
+      debugPrint('MusicAudioHandler: 会话已清空，忽略过期的 setAudioSource');
+      return;
+    }
 
     var preparedSong = song;
     if (preparedSong != null) {
@@ -594,25 +661,55 @@ class MusicAudioHandler extends BaseAudioHandler
     await super.stop();
   }
 
-  /// 清空整个媒体会话：停止播放并抹掉通知栏 / 系统媒体控制里的曲目信息。
+  /// 清空整个媒体会话：停止播放并彻底抹掉通知栏 / 系统媒体控制里的曲目信息。
   ///
-  /// 仅调用 [stop] 是不够的——那只会把通知栏切到「暂停」状态，旧曲目的
-  /// 标题/封面会一直留在通知栏，点进去还会让人以为 App 里仍在播放。
-  /// 这里额外把 `queue` 与 `mediaItem` 置空，使 Android 侧收回通知。
+  /// 顺序参照 MusicFree 的 `TrackPlayer.clearPlayList()`（先清列表与当前曲目，
+  /// 再硬重置底层播放器，最后清持久化）。
+  ///
+  /// 关键点在于 audio_service 的 Android 端**只在「非 idle → idle」的状态跳变
+  /// 时**才调用 `stop()` 收回通知栏（`AudioService.setPlaybackState`）：
+  /// ```java
+  /// if (oldProcessingState != idle && processingState == idle) stop();
+  /// ```
+  /// 所以 idle 状态必须作为**最后一次广播**推出去，且不能被
+  /// [_suppressBroadcast] 拦掉，否则通知栏会一直停在「暂停」。
+  /// 另外 `mediaItem.add(null)` 对平台侧是无效的——audio_service 的
+  /// `_observeMediaItem` 开头就 `if (mediaItem == null) return;`，所以真正
+  /// 清掉通知栏的是上面那个 idle 跳变。
   Future<void> clearMediaSession() async {
     debugPrint('MusicAudioHandler: 清空媒体会话');
+
+    // 置位：此后所有过期的 setAudioSource / setSource 都会被忽略，
+    // 避免在途的取URL / 自动换源流程把已删除的曲目写回通知栏。
+    _sessionCleared = true;
+
+    _suppressBroadcast = true;
     try {
-      await _player.stop();
-    } catch (e) {
-      debugPrint('MusicAudioHandler: clearMediaSession stop error: $e');
+      try {
+        await _player.stop();
+      } catch (e) {
+        debugPrint('MusicAudioHandler: clearMediaSession stop error: $e');
+      }
+      // 卸掉音源，否则通知栏的「播放」按钮仍能把声音放出来。
+      // just_audio 0.9.x 的 setAudioSource 不接受 null，只能把
+      // ConcatenatingAudioSource 里的条目全部清空。
+      try {
+        final source = _player.audioSource;
+        if (source is ConcatenatingAudioSource) {
+          await source.clear();
+        }
+      } catch (e) {
+        debugPrint('MusicAudioHandler: clearMediaSession unload error: $e');
+      }
+      queue.add(const <MediaItem>[]);
+      mediaItem.add(null);
+    } finally {
+      _suppressBroadcast = false;
     }
-    queue.add(const <MediaItem>[]);
-    mediaItem.add(null);
-    try {
-      await super.stop();
-    } catch (e) {
-      debugPrint('MusicAudioHandler: clearMediaSession super.stop error: $e');
-    }
+
+    // 放在 finally 之外，保证这是最后一次、且不受屏蔽影响的 idle 广播，
+    // 从而在 Android 侧触发 non-idle → idle 跳变并移除通知栏。
+    playbackState.add(_emptyPlaybackState);
   }
 
   @override
